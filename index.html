@@ -132,7 +132,7 @@ return {places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,
 var P=RotoPure,Q=new URLSearchParams(location.search),STATIC=Q.get("static")==="1",LEAGUE=Q.get("league")||"",
  SRC=Q.get("data")||(LEAGUE?"https://raw.githubusercontent.com/"+(Q.get("repo")||"")+"/data/"+LEAGUE+"/report.json":"report.json"),
  REFRESH=120000,STALE=15*60000,ME=Q.get("me")||"",DOC=null,
- BOARDS=[["roto","Season Roto"],["totals","Raw Totals"],["matrix","All-Play Matrix"],["weekly","Weekly Roto Points"],["allplay","Season All-Play"],["real","Real Record & Luck"],["kings","Category Kings"],["boom","Boom / Bust"],["power","Power Rank"]],
+ BOARDS=[["roto","Season Roto"],["totals","Raw Totals"],["matrix","All-Play Matrix"],["weekly","Weekly Roto Points"],["allplay","Season All-Play"],["real","Real Record & Luck"],["catluck","Category Luck"],["kings","Category Kings"],["boom","Boom / Bust"],["power","Power Rank"]],
  VIEWS=[["roto","Roto Points"],["stats","Raw Stats"],["allplay","All-Play Matrix"]],
  S={week:Q.get("week")?parseInt(Q.get("week"),10):null,season:Q.get("season")==="1",view:Q.get("view")||"roto",board:Q.get("board")||null,explicit:!!(Q.get("week")||Q.get("season")==="1")};
 if(S.view==="raw")S.view="stats";
@@ -171,7 +171,7 @@ function drawStatus(){var el=$("status");el.textContent="";var w=weekNo(),a=asOf
  el.appendChild(document.createTextNode(live?" · As of "+a.text:" · Final"));
  if(live&&a.stale&&!STATIC)el.appendChild(h("span",{class:"stale",text:" · ⚠ data is "+a.min+" min old, the feed may have stalled"}));}
 function drawNav(){var nav=$("nav");nav.textContent="";nav.className=S.season?"sub":"";
- var items=S.season?BOARDS:VIEWS,on=S.season?boardOf():viewOf();
+ var items=S.season?BOARDS.filter(function(x){return x[0]!=="catluck"||(DOC.composites&&DOC.composites.catLuck);}):VIEWS,on=S.season?boardOf():viewOf();
  items.forEach(function(it){var b=h("button",{class:it[0]===on?"active":"",text:it[1]});b.onclick=function(){setView(it[0]);};nav.appendChild(b);});}
 
 /* ---- sheets ---- */
@@ -217,6 +217,7 @@ function orderBy(map,key){return Object.keys(map).sort(function(a,b){return map[
 function chips(arr,n){return h("span",{class:"chips"},arr.map(function(r){return h("span",{class:P.rankCls(r,n),text:String(r)});}));}
 function boardSheet(b){var C=DOC.composites,n=Object.keys(DOC.teams).length,s=DOC.views.season,sub={
  weekly:"Each week's roto total added up",allplay:"Every week's all-play record added up",real:"Actual matchup record next to what the weekly all-play Win% predicted",
+ catluck:"Categories won in real matchups next to what each category's all-play share predicted",
  kings:"Who led each category over the season and in a single week",boom:"Best week, worst week and how steady each team was",power:"The average of a team's ranks on four boards, nothing hidden"}[b];
  var rows,heads,note,title;
  if(b==="weekly"){title="Weekly Roto Points";var o=orderBy(C.weeklyRoto,"rank"),ps=P.places(o.map(function(i){return C.weeklyRoto[i].sum;}));
@@ -229,7 +230,13 @@ function boardSheet(b){var C=DOC.composites,n=Object.keys(DOC.teams).length,s=DO
  else if(b==="real"){title="Real Record & Luck";var o=orderBy(C.realRecord,"rank"),lp=P.places(o.map(function(i){return C.realRecord[i].luck;}));
   heads=["Team","Real W-L-T","Real wins","Expected wins","Luck","Rank"];
   rows=o.map(function(id,i){var r=C.realRecord[id];return h("tr",null,[teamTh(id),td(r.record.join("-")),td(String(r.realWins)),td(r.expectedWins.toFixed(2)),td(P.signed(r.luck,2),"total "+P.cls(lp[i],n)),td(String(r.rank),"rank")]);});
-  note="Real = actual matchup result from the Score column (a tied matchup counts half a win). Expected wins = the sum of each week's all-play Win%. Luck = real wins minus expected wins: positive = more wins than the stats earned. Rank: real Win%.";}
+  note="Real = actual matchup result from the Score column (a tied matchup counts half a win). Expected wins = the sum of each week's all-play Win%. Luck = real wins minus expected wins: positive = more wins than the stats earned. Rank: real Win%. How to calculate expected wins by hand: for one week, take your category wins, losses and ties against every other team (the All-Play Matrix total, e.g. 16 teams x 9 categories = 135 head-to-head category battles; 90-40-5 gives (90 + 5/2) / 135 = 0.685). Do that for every week and add the weekly Win% values. After 3 weeks of 0.685, 0.500 and 0.400 your expected wins are 1.59; if you actually won 3 matchups, your luck is +1.41.";}
+ else if(b==="catluck"){title="Category Luck";var cl=C.catLuck||{},o=orderBy(cl,"rank"),cats=DOC.categories,lp=P.places(o.map(function(i){return cl[i].luck;})),
+   cp=cats.map(function(c){return P.places(o.map(function(i){return cl[i].byCat[c.cat].diff;}));});
+  heads=["Team","Real cats","Expected cats","Luck"].concat(cats.map(function(c){return c.cat;}),["Rank"]);
+  rows=o.map(function(id,i){var r=cl[id],tr=h("tr",null,[teamTh(id),td(String(r.real)),td(r.expected.toFixed(2)),td(P.signed(r.luck,2),"total "+P.cls(lp[i],n))]);
+   cats.forEach(function(c,k){tr.appendChild(td(P.signed(r.byCat[c.cat].diff,2),P.cls(cp[k][i],n)));});tr.appendChild(td(String(r.rank),"rank"));return tr;});
+  note="Real cats = categories won against the actual opponent each week (a level category counts half). Expected cats = in each category, the share of the other teams you would have beaten that week (all-play), added over the weeks. Each category column is real minus expected: positive = you won that category more often than your stats earned, negative = less. Luck = the sum over categories. Example: in a 16-team league a team ranks 12th of 16 in PTS one week, so it beat 4 of 15 teams: expected 0.27; if it also won that category against its opponent (real 1), that is +0.73. Level teams count half.";}
  else if(b==="kings"){title="Category Kings";heads=[["Category","team"],["Season leader","left"],["Best single week","left"]];
   var f=function(k,wk){if(!k)return "–";var c=DOC.categories.filter(function(x){return x.cat===k.cat;})[0];return name(k.team)+(wk?" (W"+k.week+") ":" ")+P.fmtVal(c.pct,k.value)+((k.also&&k.also.length)?" +"+k.also.length+" level":"");};
   rows=DOC.categories.map(function(c){var k=C.categoryKings[c.cat],a=k.season&&Object.assign({cat:c.cat},k.season),w=k.week&&Object.assign({cat:c.cat},k.week);

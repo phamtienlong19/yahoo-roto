@@ -52,8 +52,11 @@ jobs:
             if [ "$h" -ge 22 ] || [ "$h" -le 7 ] || { [ "$h" -ge 16 ] && [ "$d" -ge 6 ]; }; then echo 240; else echo 900; fi; }
           # the data branch carries the finished weeks' cache between runs
           if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then git fetch -q --depth=1 origin data && git archive FETCH_HEAD _cache 2>/dev/null | tar -x -C cache || true; fi
+          # ...and the other leagues' reports: a one-league run (or a league that failed) must not wipe them from the force-pushed branch
+          mkdir -p prev
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then git archive FETCH_HEAD 2>/dev/null | tar -x -C prev || true; fi
           while :; do
-            start=$(date +%s); out=$(mktemp -d)
+            start=$(date +%s); out=$(mktemp -d); cp -R prev/. "$out/"
             leagues="$ONE"; [ -n "$leagues" ] || leagues=$(python3 -c "import json;print(' '.join(map(str,json.load(open('leagues.json'))['leagues'])))")
             for id in $leagues; do
               mkdir -p "$out/$id"
@@ -64,6 +67,7 @@ jobs:
             ( cd "$out" && git init -q -b data && git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com" \
               && git add -A && git commit -q -m "roto $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               && git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data ) || echo "publish failed"
+            rm -rf prev; mkdir -p prev; ( cd "$out" && tar --exclude=.git -cf - . ) | tar -xf - -C prev
             [ -n "$ONE" ] && break
             rest=$(( $(pick) - ($(date +%s) - start) )); [ "$rest" -gt 0 ] || continue
             [ $(( $(date +%s) + rest )) -lt "$end" ] || break

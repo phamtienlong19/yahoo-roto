@@ -15,7 +15,7 @@ python3 yahoo_roto.py 85092 --report out/ --cache .cache   # reruns only fetch t
 ```
 `index.html` (the page template; the report writes a self-contained copy with the JSON inlined) opens on the latest week with stats ("Week N (in progress)").
 A week strip (`W1 ... WN`, `<` `>` buttons, left/right keys) switches weeks; the **Season** tab holds the composite boards (Season Roto, Raw Totals, All-Play
-Matrix, Weekly Roto Points, Season All-Play, Real Record & Luck, Category Kings, Boom / Bust, Power Rank). Roto Points / Raw Stats / All-Play Matrix keep the
+Matrix, Weekly Roto Points, Season All-Play, Real Record & Luck, Category Luck, Category Kings, Boom / Bust, Power Rank). Roto Points / Raw Stats / All-Play Matrix keep the
 chosen week. The choice lives in the URL: `?week=3&view=allplay` (views `roto`, `stats`, `allplay`) or `?season=1&board=power`. It is built for phones too:
 the team column sticks and wide tables scroll inside their own box, never the page. The look follows `reference/serie_a_week3.html`.
 
@@ -37,6 +37,17 @@ About 12 Yahoo requests per league per refresh (settings, standings, one page fo
 Per category, teams are ranked (worst = 1 point, best = number of teams, level teams share the average place, fewer is better for TO/PF). Season roto adds
 the weekly totals first; percentages come from summed makes and attempts. All-play: every team against every other, category by category. All of it is
 derived here and display-only: not a Yahoo number. A week is final once a later week has stats; the newest week is "in progress".
+
+### Expected wins, by hand
+Each week, every team plays every other team in every category (all-play). Win% = (W + T/2) / (W + L + T) over those category battles; with 16 teams and 9
+categories that is 135 battles, so 90-40-5 is (90 + 2.5) / 135 = 0.685. Expected wins = the sum of those weekly Win% values (0.685 + 0.500 + 0.400 = 1.59 after
+three weeks). Luck = real matchup wins (a tie counts half) minus expected wins, so 3 real wins would be +1.41. It reads "how many matchups your stats should have won".
+
+### Category luck, by hand
+The same idea per category, on the **Category Luck** season board (`?season=1&board=catluck`). For one team, one category, one week: expected = the share of the
+other teams it would have beaten in that category (level counts half); real = 1 if it beat its actual opponent in it (0.5 level, 0 lost). Each category
+column is real minus expected, added over the weeks. Example: 12th of 16 in PTS beats 4 of 15 teams, expected 0.27; winning the category anyway is +0.73.
+Real cats are the Score column's category wins; Luck is the sum of the category columns (zero across the league).
 
 ## Limits (stated, not hidden)
 - The league must be viewable without a login. A private or unknown id gets a plain message; the tool never signs in and cannot read it.
