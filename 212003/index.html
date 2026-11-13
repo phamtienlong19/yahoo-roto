@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Roto report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Geist+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+ --blue:#1667ac;--ink:#1d2732;--muted:#718195;--line:#dae3e9;--stripe:#f4f6f8;
+ --green-strong:#9fe0b3;--green-soft:#e1f3e7;--red-strong:#ecadb9;--red-soft:#fae8ec;
+ --dark-green:#7fcf9d;--green:#b8e9c8;--light-green:#e9f7ee;--white:#ffffff;
+ --light-red:#fdecef;--red:#f5c7d0;--dark-red:#e79cae;--actual:#6a58d6;
+ --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;--radius:14px;
+}
+*{box-sizing:border-box}
+html{font-family:Inter,"Noto Sans","Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;font-variant-numeric:tabular-nums}
+body{margin:0;background:#eceff3;color:var(--ink);padding:clamp(8px,2vw,20px)}
+button{font-family:inherit}
+.wrap{width:min(100%,2600px);margin:0 auto}
+.weekbar,.status,nav{width:min(100%,1680px);margin-left:auto;margin-right:auto}
+.weekbar{display:flex;align-items:stretch;gap:6px;margin-bottom:8px}
+.weekbar .arrow{flex:0 0 auto;width:40px;border:1px solid #d3dce4;background:#fff;color:#425464;border-radius:10px;font:700 20px/1 Inter,"Noto Sans","Segoe UI",Arial,sans-serif;cursor:pointer}
+.weekbar .arrow:disabled{opacity:.35;cursor:default}
+.strip{flex:1 1 auto;min-width:0;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:2px}
+.strip button{flex:0 0 auto;min-width:46px;padding:9px 12px;border:1px solid #d3dce4;background:#fff;color:#425464;border-radius:999px;font:600 14px Inter,"Noto Sans","Segoe UI",Arial,sans-serif;cursor:pointer;white-space:nowrap}
+.strip button.live::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#e0803a;margin-left:6px;vertical-align:middle}
+.strip button.season{margin-left:10px}
+.strip button[aria-selected=true]{background:var(--blue);border-color:var(--blue);color:#fff}
+.status{font:600 13px/1.4 Inter,"Noto Sans","Segoe UI",Arial,sans-serif;color:#51657a;text-align:center;margin:0 auto 10px}
+.status b{color:var(--ink)}.status .stale{color:#a1233a;font-weight:700}
+nav{display:flex;gap:10px;justify-content:center;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+nav button{font:600 clamp(13px,3.4vw,18px) Inter,"Noto Sans","Segoe UI",Arial,sans-serif;background:#fff;color:#425464;border:1px solid #d3dce4;border-radius:999px;padding:clamp(8px,1.6vw,12px) clamp(14px,3vw,24px);cursor:pointer;transition:background .15s,color .15s}
+nav button.active{background:var(--blue);border-color:var(--blue);color:#fff}
+nav.sub button{font-size:clamp(12px,3vw,15px);padding:8px clamp(10px,2.4vw,16px)}
+
+.sheet{container-type:inline-size;background:#fff;margin:0 auto;border-radius:var(--radius);box-shadow:0 1px 2px #1b365010,0 8px 28px #1b36500d;width:min(100%,1680px)}
+.sheet.matrix{width:min(100%,2600px)}
+.in{padding:clamp(14px,2.9cqw,48px) clamp(8px,2.6cqw,44px) clamp(14px,3.4cqw,58px)}
+h1{text-align:center;font-size:clamp(18px,2.92cqw,49px);letter-spacing:-.025em;color:var(--blue);font-weight:700;margin:0;line-height:1.2;text-wrap:balance}
+.view-subtitle{font-size:clamp(12px,1.67cqw,28px);color:#486075;text-align:center;font-weight:650;margin:.45em auto 1.7em;line-height:1.2}
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+table{border-collapse:separate;border-spacing:0}
+.st{width:100%;font-size:clamp(12px,1.6cqw,27px)}
+.st th,.st td{text-align:center;padding:.26em .2em;white-space:nowrap;vertical-align:middle;min-width:3.3em;font-weight:570}
+.st thead th{height:2.75em;font-size:.72em;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5b6f83;border-bottom:2px solid #c9d7e3;padding-bottom:.7em}
+.st thead th:first-child{text-align:right;padding-right:.8em}
+.st tbody tr{height:3.05em}
+.st tbody td,.st tbody th{border-bottom:1px solid #e6ebef}
+.st tbody tr:nth-child(odd){background:#fff}.st tbody tr:nth-child(even){background:var(--stripe)}
+.st th.team{text-align:right;padding-right:.8em;font-size:.89em;font-weight:730;letter-spacing:-.02em;overflow:hidden;text-overflow:ellipsis;
+ position:sticky;left:0;z-index:2;min-width:clamp(108px,20cqw,340px);max-width:clamp(108px,20cqw,340px);box-shadow:1px 0 0 #e6ebef}
+.st thead th.team{z-index:3;background:#fff}
+.st tbody tr:nth-child(odd) th.team{background:#fff}.st tbody tr:nth-child(even) th.team{background:var(--stripe)}
+.st th.team.me{box-shadow:inset 4px 0 0 var(--blue),1px 0 0 #e6ebef}
+.st td.green-strong{background:var(--green-strong);color:#164629;font-weight:750}.st td.green-soft{background:var(--green-soft);color:#27543b;font-weight:640}
+.st td.red-strong{background:var(--red-strong);color:#662d38;font-weight:750}.st td.red-soft{background:var(--red-soft);color:#72404a;font-weight:640}
+.st td{font-family:var(--mono);font-size:.88em;letter-spacing:-.01em}
+.st td.mid{color:var(--ink)}
+.st td.total,.st td.rank,.st td.score{font-size:1.04em;font-weight:790}
+.st thead tr.grp th{height:auto;padding:.5em .2em .35em;font-size:.68em;color:#8a97a5;border-bottom:0;text-align:center}
+.st thead tr.grp th span:empty{display:none}
+.st thead tr.grp th span{display:block;border-bottom:1px solid #d5dee6;padding-bottom:.35em;margin:0 .6em}
+.st th.sep,.st td.sep{border-left:3px solid #b9cbdb}
+.st th.tot,.st td.tot{background-image:linear-gradient(#2a6fa90d,#2a6fa90d)}
+.st td.tot{font-weight:800;padding:.26em .45em}
+.st th.tot{padding-left:.45em;padding-right:.45em}
+.st.luck th.team{min-width:clamp(108px,15cqw,250px);max-width:clamp(108px,15cqw,250px)}
+.st td.cat{min-width:0;padding-left:.35em;padding-right:.35em}
+.st th.sep,.st th.tot{min-width:0}
+.st td.pos{color:#1d7a46}.st td.neg{color:#b02a46}
+.st td.cat{font-weight:520}
+.st td.king{line-height:1.15}.st td.king .kn{font-family:Inter,"Noto Sans","Segoe UI",Arial,sans-serif;font-weight:760;font-size:1.06em;color:var(--ink);letter-spacing:-.01em}
+.st td.king .small{margin-top:.15em;color:#8a97a5}
+.st td.kv{font-weight:700;color:var(--blue);background-image:linear-gradient(#2a6fa90f,#2a6fa90f)}
+.st td.kw{color:#6a7785;font-weight:600}
+.st th.left.sep,.st td.left.sep{padding-left:1em}
+.st td.left,.st th.left{text-align:left;padding-left:.8em}
+.st td.wide{min-width:6em}
+.chips{display:inline-flex;gap:.25em;vertical-align:middle}
+.chips span{font-family:var(--mono);display:inline-block;min-width:1.9em;padding:.12em .3em;border-radius:.3em;font-size:.78em;font-weight:700;background:#fff;border:1px solid #e6ebef}
+.chips span.green-strong{background:var(--green-strong);color:#164629}.chips span.green-soft{background:var(--green-soft);color:#27543b}
+.chips span.red-strong{background:var(--red-strong);color:#662d38}.chips span.red-soft{background:var(--red-soft);color:#72404a}
+.small{display:block;font-size:.6em;font-weight:600;opacity:.75}
+.note{font-size:clamp(11px,1.07cqw,18px);color:#6a7785;text-align:center;margin-top:1.1em;line-height:1.4}
+.stamp{font-size:clamp(10px,.9cqw,15px);color:#8a97a5;text-align:center;margin-top:.8em}
+
+.legend{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:0 auto 1.4em;font-size:clamp(11px,1.07cqw,18px);color:#4c6072}
+.legend .sw{display:inline-flex;align-items:center;gap:.5em;border:1px solid #dce3e8;border-radius:999px;background:#fff;padding:.45em .7em}
+.legend .chip{width:1.3em;height:1em;border-radius:3px;display:inline-block;border:1px solid #d5dee6}
+.mx{width:100%;font-size:clamp(12px,.92cqw,24px)}
+.mx th,.mx td{border:solid #e3eaef;border-width:0 1px 1px 0;text-align:center;vertical-align:middle;white-space:nowrap}
+.mx{border-top:1px solid #e3eaef;border-left:1px solid #e3eaef}
+.mx thead th{background:#fff;padding:.5em .3em;font-size:.74em;font-weight:780;color:#35516a;white-space:normal;min-width:64px;line-height:1.15;overflow-wrap:break-word}
+.mx thead th.side{position:sticky;left:0;z-index:3}
+.mx tbody th{position:sticky;left:0;z-index:2;background:#fff;text-align:right;padding:0 .7em;font-weight:730;min-width:clamp(112px,14cqw,360px);max-width:clamp(112px,14cqw,360px);overflow:hidden;text-overflow:ellipsis;font-size:.96em}
+.mx tbody tr:nth-child(even) th{background:var(--stripe)}
+.mx tbody th.me{box-shadow:inset 4px 0 0 var(--blue)}
+.mx tbody td{font-family:var(--mono);min-width:64px;height:3.1em;font-weight:770;padding:0 .2em;font-size:1em}
+.mx .small{margin-top:.1em;font-size:.55em}
+.mx .diag{background:#fbfcfd;color:#b4bfca}
+.mx .dark-green{background:var(--dark-green);color:#143f27}.mx .green{background:var(--green);color:#1d4a31}.mx .light-green{background:var(--light-green);color:#2b5540}
+.mx .white{background:#fff;color:#405060}.mx .light-red{background:var(--light-red);color:#6a3d46}.mx .red{background:var(--red);color:#6d3641}.mx .dark-red{background:var(--dark-red);color:#602531}
+.mx .record,.mx .pct{background:#f8fafb;font-weight:780;color:#223241;min-width:5em}
+.mx .actual{box-shadow:inset 0 0 0 3px var(--actual)}
+.chip.dark-green{background:var(--dark-green)}.chip.green{background:var(--green)}.chip.light-green{background:var(--light-green)}.chip.white{background:#fff}
+.chip.light-red{background:var(--light-red)}.chip.red{background:var(--red)}.chip.dark-red{background:var(--dark-red)}
+.msg{padding:48px 16px;text-align:center;color:#51657a;font:600 15px/1.5 Inter,"Noto Sans","Segoe UI",Arial,sans-serif}.msg b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+.err{color:#a1233a}
+
+body.static{padding:0;background:#fff}
+body.static .weekbar,body.static .status,body.static nav{display:none}
+body.static .wrap{width:100%}
+body.static .sheet{box-shadow:none;width:100%}
+@media print{body{padding:0;background:#fff}.weekbar,.status,nav{display:none}.sheet{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <div class="weekbar" id="weekbar"><button class="arrow" id="prev" aria-label="Previous week" title="Previous (left arrow)">&#8249;</button><div class="strip" id="strip" role="tablist" aria-label="Week"></div><button class="arrow" id="next" aria-label="Next week" title="Next (right arrow)">&#8250;</button></div>
+ <div class="status" id="status"></div>
+ <nav id="nav"></nav>
+ <main id="main"><section class="sheet"><div class="in"><div class="msg">Loading&hellip;</div></div></section></main>
+</div>
+<script id="pure">
+/* Pure helpers (no DOM): colour buckets, places, number formats. Unit-tested by tests/test_page.py. */
+var RotoPure=(function(){
+"use strict";
+function places(vals){ /* higher is better; 1 = worst ... n = best; level values share the average place. null stays null */
+ var idx=[],out=[],i,j,k;for(i=0;i<vals.length;i++){out.push(null);if(vals[i]!=null)idx.push(i);}
+ idx.sort(function(a,b){return vals[a]-vals[b];});
+ for(i=0;i<idx.length;i=j+1){j=i;while(j+1<idx.length&&vals[idx[j+1]]===vals[idx[i]])j++;for(k=i;k<=j;k++)out[idx[k]]=(i+1+j+1)/2;}
+ return out;}
+function cls(p,n){ /* roto points relative to n teams -> colour class */
+ if(p==null)return "mid";
+ if(p>=n-2)return "green-strong";if(p>=n-5)return "green-soft";if(p<=3)return "red-strong";if(p<=6)return "red-soft";return "mid";}
+function rankCls(r,n){return r==null?"mid":cls(n+1-r,n);}
+function matrixCls(m){ /* margin (category wins minus losses; the weekly average on the season matrix) -> cell colour */
+ if(m>=5)return "dark-green";if(m>=3)return "green";if(m>0)return "light-green";if(m===0)return "white";if(m>-3)return "light-red";if(m>-5)return "red";return "dark-red";}
+function fmtVal(pct,v){if(v==null)return "–";if(pct)return v.toFixed(3).replace(/^0/,"");return String(Math.round(v*100)/100);}
+function fmtPts(p){return p==null?"–":(p%1?p.toFixed(1):String(p));}
+function pct3(x){return x==null?"–":x.toFixed(3);}
+function signed(x,d){if(x==null)return "–";var s=Math.abs(x).toFixed(d);return (x>0?"+":x<0?"−":"")+s;}
+return {places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct3:pct3,signed:signed};
+})();
+</script>
+<script>
+(function(){
+"use strict";
+var P=RotoPure,Q=new URLSearchParams(location.search),STATIC=Q.get("static")==="1",LEAGUE=Q.get("league")||(location.pathname.match(/\/(\d+)\/?(?:index\.html)?$/)||[])[1]||"",   /* <site>/207464/ = that league */
+ PM=location.hostname.match(/^([^.]+)\.github\.io$/),PS=location.pathname.split("/")[1],
+ REPO=Q.get("repo")||(PM&&PS?PM[1]+"/"+PS:""),                /* on <owner>.github.io/<repo>/ the repo is known: no ?repo= needed */
+ SRC=Q.get("data")||"",
+ REFRESH=120000,STALE=15*60000,ME=Q.get("me")||"",DOC=null,
+ BOARDS=[["roto","Season Roto"],["totals","Raw Totals"],["matrix","All-Play Matrix"],["weekly","Weekly Roto Points"],["allplay","Season All-Play"],["real","Real Record & Luck"],["catluck","Category Luck"],["kings","Category Kings"],["boom","Boom / Bust"],["power","Power Rank"]],
+ VIEWS=[["roto","Roto Points"],["stats","Raw Stats"],["allplay","All-Play Matrix"]],
+ S={week:Q.get("week")?parseInt(Q.get("week"),10):null,season:Q.get("season")==="1"||!!Q.get("board"),view:Q.get("view")||"roto",board:Q.get("board")||null,explicit:!!(Q.get("week")||Q.get("season")==="1"||Q.get("board"))};   /* ?board=catluck alone opens the Season tab on that board */
+if(S.view==="raw")S.view="stats";
+if(STATIC)document.body.classList.add("static");
+
+function $(id){return document.getElementById(id);}
+function h(tag,attrs,kids){var e=document.createElement(tag);for(var k in attrs||{}){if(attrs[k]==null)continue;if(k==="text")e.textContent=attrs[k];else e.setAttribute(k,attrs[k]);}
+ (kids||[]).forEach(function(c){if(c==null)return;e.appendChild(typeof c==="string"?document.createTextNode(c):c);});return e;}
+function name(id){return DOC.teams[id]||("Team "+id);}
+function cur(){return DOC.inProgressWeek;}
+function weekNo(){return S.season?null:(S.week&&DOC.views["w"+S.week]?S.week:cur());}
+function lg(){return DOC.leagueName||("Yahoo league "+DOC.league);}
+function span(v){var w=v.weeks;return w.length>1?"Weeks "+w[0]+"-"+w[w.length-1]:"Week "+w[0];}
+
+/* ---- URL state ---- */
+function boardOf(){var b=S.board;if(b&&BOARDS.some(function(x){return x[0]===b;}))return b;return {roto:"roto",stats:"totals",allplay:"matrix"}[S.view]||"roto";}
+function viewOf(){var v=S.view;if(VIEWS.some(function(x){return x[0]===v;}))return v;return {roto:"roto",totals:"stats",matrix:"allplay"}[S.board]||"roto";}
+function pushUrl(){if(STATIC)return;var q=new URLSearchParams(location.search);["week","season","view","board"].forEach(function(k){q.delete(k);});
+ if(S.season){q.set("season","1");q.set("board",boardOf());}else{if(S.explicit||S.week)q.set("week",String(weekNo()));q.set("view",viewOf());}
+ try{history.replaceState(null,"","?"+q.toString());}catch(e){}}
+function setWeek(w){S.explicit=true;if(w==="season"){S.season=true;S.board=null;}else{S.season=false;S.week=w;}update();}
+function setView(v){if(S.season)S.board=v;else S.view=v;update();}
+function step(d){var seq=DOC.weeks.concat(["season"]),i=S.season?seq.length-1:seq.indexOf(weekNo()),j=Math.max(0,Math.min(seq.length-1,i+d));if(j!==i)setWeek(seq[j]);}
+
+/* ---- chrome: week strip, status, view tabs ---- */
+function drawStrip(){var st=$("strip");st.textContent="";var w=weekNo();
+ DOC.weeks.forEach(function(k){var b=h("button",{role:"tab","aria-selected":(!S.season&&k===w)?"true":"false",class:k===cur()?"live":"",title:"Week "+k+(k===cur()?" (in progress)":"")},["W"+k]);b.onclick=function(){setWeek(k);};st.appendChild(b);});
+ var sb=h("button",{role:"tab",class:"season","aria-selected":S.season?"true":"false"},["Season"]);sb.onclick=function(){setWeek("season");};st.appendChild(sb);
+ var sel=st.querySelector('[aria-selected="true"]');if(sel)st.scrollLeft=sel.offsetLeft-(st.clientWidth-sel.offsetWidth)/2;
+ var seq=DOC.weeks.concat(["season"]),i=S.season?seq.length-1:seq.indexOf(w);$("prev").disabled=i<=0;$("next").disabled=i>=seq.length-1;}
+function asOf(){var t=new Date(DOC.asOf),age=Date.now()-t.getTime();
+ return {text:t.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}),stale:age>STALE,min:Math.round(age/60000)};}
+function drawStatus(){var el=$("status");el.textContent="";var w=weekNo(),a=asOf(),live=S.season||w===cur();
+ var lead=S.season?"Season, "+span(DOC.views.season).toLowerCase()+(DOC.weeks.length?" · week "+cur()+" in progress":""):"Week "+w+(live?" (in progress)":"");
+ el.appendChild(h("b",{text:lead}));
+ el.appendChild(document.createTextNode(live?" · As of "+a.text:" · Final"));
+ if(live&&a.stale&&!STATIC)el.appendChild(h("span",{class:"stale",text:" · ⚠ data is "+a.min+" min old, the feed may have stalled"}));}
+function drawNav(){var nav=$("nav");nav.textContent="";nav.className=S.season?"sub":"";
+ var items=S.season?BOARDS.filter(function(x){return x[0]!=="catluck"||(DOC.composites&&DOC.composites.catLuck);}):VIEWS,on=S.season?boardOf():viewOf();
+ items.forEach(function(it){var b=h("button",{class:it[0]===on?"active":"",text:it[1]});b.onclick=function(){setView(it[0]);};nav.appendChild(b);});}
+
+/* ---- sheets ---- */
+function sheet(kind,title,sub,body,note){
+ var inner=[h("h1",{text:title}),h("div",{class:"view-subtitle",text:sub})].concat(body);
+ if(note)inner.push(h("div",{class:"note",text:note}));
+ if(STATIC){var a=asOf();inner.push(h("div",{class:"stamp",text:(S.season?"Season":"Week "+weekNo())+(S.season||weekNo()===cur()?" (in progress) · as of "+a.text:" · final")}));}
+ return h("section",{class:"sheet "+kind},[h("div",{class:"in"},inner)]);}
+function scroller(t){return h("div",{class:"tscroll"},[t]);}
+function th(t,c){return h("th",{class:c||null,text:t});}
+function teamTh(id){return h("th",{class:"team"+(String(id)===ME?" me":""),title:name(id),text:name(id)});}
+function table(heads,rows,groups,cls){var tr=h("tr"),gr=null;if(groups){gr=h("tr",{class:"grp"});groups.forEach(function(g){gr.appendChild(h("th",{colspan:g[1],class:g[2]||null},[h("span",{text:g[0]})]));});}heads.forEach(function(x,i){tr.appendChild(typeof x==="string"?th(x,i===0?"team":null):th(x[0],x[1]));});
+ return h("table",{class:"st"+(cls?" "+cls:"")},[h("thead",null,gr?[gr,tr]:[tr]),h("tbody",null,rows)]);}
+function td(text,c){return h("td",{class:c||null,text:text});}
+
+function rotoSheet(v,title,sub){var n=v.order.length,cats=DOC.categories,ids=v.order,tp=P.places(ids.map(function(i){return v.teams[i].total;}));
+ var rows=ids.map(function(id,r){var t=v.teams[id],tr=h("tr",null,[teamTh(id)]);
+  cats.forEach(function(c){var p=t.points[c.cat];tr.appendChild(td(P.fmtPts(p),P.cls(p,n)));});
+  tr.appendChild(td(P.fmtPts(t.total),"total "+P.cls(tp[r],n)));tr.appendChild(td(String(t.rank),"rank"));return tr;});
+ return sheet("data",title,sub,[scroller(table(["Team"].concat(cats.map(function(c){return c.cat;}),["Total","Rank"]),rows))],"No yellow used: green = stronger, red = weaker, white = neutral.");}
+function statsSheet(v,title,sub,withScore){var n=v.order.length,cats=DOC.categories,ids=v.order,sp=withScore?P.places(ids.map(function(i){return v.teams[i].score;})):[];
+ var rows=ids.map(function(id,r){var t=v.teams[id],tr=h("tr",null,[teamTh(id)]);
+  cats.forEach(function(c){tr.appendChild(td(P.fmtVal(c.pct,t.values[c.cat]),P.cls(t.points[c.cat],n)));});
+  if(withScore)tr.appendChild(td(t.score==null?"–":String(t.score),"score "+P.cls(sp[r],n)));return tr;});
+ return sheet("data",title,sub,[scroller(table(["Team"].concat(cats.map(function(c){return c.cat;}),withScore?["Score"]:[]),rows))],"FG% and FT% shown to three decimals; turnovers are better when lower.");}
+function legend(week){var sw=[["dark-green","Dark green"],["green","Green"],["light-green","Light green"],["white","Tie / neutral"],["light-red","Light red"],["red","Red"],["dark-red","Dark red"]],
+ kids=sw.map(function(s){return h("div",{class:"sw"},[h("span",{class:"chip "+s[0]}),s[1]]);});
+ if(week)kids.push(h("div",{class:"sw"},[h("span",{class:"chip",style:"box-shadow:inset 0 0 0 3px var(--actual)"}),"Actual Week "+week+" matchup"]));
+ return h("div",{class:"legend"},kids);}
+function matrixSheet(v,title,sub,week){var ids=v.allPlayOrder,nw=v.weeks.length,opp={};
+ (v.matchups||[]).forEach(function(m){opp[m[0]]=m[1];opp[m[1]]=m[0];});
+ var hr=h("tr",null,[th("Team","side")]);ids.forEach(function(id){hr.appendChild(h("th",{title:name(id),text:name(id)}));});hr.appendChild(th("All-Play"));hr.appendChild(th("Win%"));
+ var rows=ids.map(function(a){var t=v.teams[a],tr=h("tr",null,[h("th",{class:String(a)===ME?"me":null,title:name(a),text:name(a)})]);
+  ids.forEach(function(b){if(a===b){tr.appendChild(td("—","diag"));return;}var c=v.matrix[a][b],m=(c[0]-c[1])/nw,
+   cell=h("td",{class:P.matrixCls(m)+(opp[a]===b?" actual":"")},[c[0]+"-"+c[1]]);if(c[2])cell.appendChild(h("span",{class:"small",text:"T"+c[2]}));tr.appendChild(cell);});
+  tr.appendChild(td(t.allPlay.join("-"),"record"));tr.appendChild(td(P.pct3(t.winPct),"pct"));return tr;});
+ var t=h("table",{class:"mx"},[h("thead",null,[hr]),h("tbody",null,rows)]);
+ return sheet("matrix",title,sub,[legend(week),scroller(t)],"Cell values are category scores from the row team's perspective. Example: 6-3 means the row team wins 6 categories to 3. Ties are shown as T1 when present."+(week?"":" Season cells add up the category records of every week; colours use the average weekly margin."));}
+
+/* ---- season boards ---- */
+function sTitle(b){return /^Season/.test(b)?lg()+" "+b+", "+span(DOC.views.season):lg()+" "+b+" "+span(DOC.views.season).replace("Weeks ","Season, Weeks ");}
+function orderBy(map,key){return Object.keys(map).sort(function(a,b){return map[a][key]-map[b][key]||a-b;});}
+function chips(arr,n){return h("span",{class:"chips"},arr.map(function(r){return h("span",{class:P.rankCls(r,n),text:String(r)});}));}
+function boardSheet(b){var C=DOC.composites,n=Object.keys(DOC.teams).length,s=DOC.views.season,sub={
+ weekly:"Each week's roto total added up",allplay:"Every week's all-play record added up",real:"Actual matchup record next to what the weekly all-play Win% predicted",
+ catluck:"Categories won in real matchups next to what each category's all-play share predicted",
+ kings:"Who led each category over the season and in a single week",boom:"Best week, worst week and how steady each team was",power:"The average of a team's ranks on four boards, nothing hidden"}[b];
+ var rows,heads,note,title,groups=null;
+ if(b==="weekly"){title="Weekly Roto Points";var o=orderBy(C.weeklyRoto,"rank"),ps=P.places(o.map(function(i){return C.weeklyRoto[i].sum;}));
+  heads=["Team","Points","Avg / week","Weekly ranks","Rank"];
+  rows=o.map(function(id,i){var r=C.weeklyRoto[id];return h("tr",null,[teamTh(id),td(P.fmtPts(r.sum),"total "+P.cls(ps[i],n)),td(r.avg.toFixed(2),""),h("td",{class:"wide"},[chips(r.weekRanks,n)]),td(String(r.rank),"rank")]);});
+  note="Formula: sum of each week's roto total over weeks "+C.weeks[0]+"-"+C.weeks[C.weeks.length-1]+" (a week's total = the 1..n category places added up). Weekly ranks: the team's roto rank in each week, W"+C.weeks[0]+" first.";}
+ else if(b==="allplay"){title="Season All-Play";var o=orderBy(C.seasonAllPlay,"rank");heads=["Team","W-L-T","Win%","Rank"];
+  rows=o.map(function(id){var r=C.seasonAllPlay[id];return h("tr",null,[teamTh(id),td(r.record.join("-")),td(P.pct3(r.winPct),P.rankCls(r.rank,n)),td(String(r.rank),"rank")]);});
+  note="Formula: every week's all-play record (each team against every other team, by category wins) added up; Win% = (W + T/2) / (W + L + T).";}
+ else if(b==="real"){title="Real Record & Luck";var o=orderBy(C.realRecord,"rank"),lp=P.places(o.map(function(i){return C.realRecord[i].luck;}));
+  heads=["Team","Real W-L-T","Real wins","Expected wins","Luck","Rank"];
+  rows=o.map(function(id,i){var r=C.realRecord[id];return h("tr",null,[teamTh(id),td(r.record.join("-")),td(String(r.realWins)),td(r.expectedWins.toFixed(2)),td(P.signed(r.luck,2),"total "+P.cls(lp[i],n)),td(String(r.rank),"rank")]);});
+  note="Real = actual matchup result from the Score column (a tied matchup counts half a win). Expected wins = the sum of each week's all-play Win%. Luck = real wins minus expected wins: positive = more wins than the stats earned. Rank: real Win%. How to calculate expected wins by hand: for one week, take your category wins, losses and ties against every other team (the All-Play Matrix total, e.g. 16 teams x 9 categories = 135 head-to-head category battles; 90-40-5 gives (90 + 5/2) / 135 = 0.685). Do that for every week and add the weekly Win% values. After 3 weeks of 0.685, 0.500 and 0.400 your expected wins are 1.59; if you actually won 3 matchups, your luck is +1.41.";}
+ else if(b==="catluck"){title="Category Luck";var cl=C.catLuck||{},o=orderBy(cl,"rank"),cats=DOC.categories,lp=P.places(o.map(function(i){return cl[i].luck;})),
+   cp=cats.map(function(c){return P.places(o.map(function(i){return cl[i].byCat[c.cat].diff;}));});
+  heads=["Team",["Real cats","tot"],["Expected cats","tot"],["Luck","tot"]].concat(cats.map(function(c,k){return [c.cat,k?null:"sep"];}),[["Rank","sep"]]);
+  rows=o.map(function(id,i){var r=cl[id],tr=h("tr",null,[teamTh(id),td(String(r.real),"tot"),td(r.expected.toFixed(2),"tot"),td(P.signed(r.luck,2),"tot total "+(r.luck>0.005?"pos":r.luck<-0.005?"neg":""))]);
+   cats.forEach(function(c,k){tr.appendChild(td(P.signed(r.byCat[c.cat].diff,2),"cat "+(k?"":"sep ")+P.cls(cp[k][i],n)));});tr.appendChild(td(String(r.rank),"rank sep"));return tr;});
+  groups=[["",1],["Season totals",3,"tot"],["Luck by category (real − expected)",cats.length,"sep"],["",1,"sep"]];
+  note="Real cats = categories won against the actual opponent each week (a level category counts half). Expected cats = in each category, the share of the other teams you would have beaten that week (all-play), added over the weeks. Each category column is real minus expected: positive = you won that category more often than your stats earned, negative = less. Luck = the sum over categories. Example: in a 16-team league a team ranks 12th of 16 in PTS one week, so it beat 4 of 15 teams: expected 0.27; if it also won that category against its opponent (real 1), that is +0.73. Level teams count half.";}
+ else if(b==="kings"){title="Category Kings";heads=[["Category","team"],["Leader","left"],["Total",null],["Leader","left sep"],["Week",null],["Best",null]];
+  var kc=DOC.categories.filter(function(c){return C.categoryKings[c.cat];}),
+   who=function(k){return k?h("td",{class:"left king"},[h("span",{class:"kn",text:name(k.team)}),(k.also&&k.also.length)?h("span",{class:"small",text:"+"+k.also.length+" level"}):null].filter(Boolean)):td("–","left");};
+  rows=kc.map(function(c){var k=C.categoryKings[c.cat],a=k.season,w=k.week,tr=h("tr",null,[h("th",{class:"team",text:c.cat+(c.lower?" (fewer is better)":"")}),who(a),td(a?P.fmtVal(c.pct,a.value):"–","kv")]);
+   var wt=who(w);wt.className+=" sep";tr.appendChild(wt);tr.appendChild(td(w?"W"+w.week:"–","kw"));tr.appendChild(td(w?P.fmtVal(c.pct,w.value):"–","kv"));return tr;});
+  groups=[["",1],["Season",2],["Single week",3]];
+  note="Season leader: the best summed category total over the season. Single week: the best one-week total in that category. Level holders show as +N level. Turnovers are left out: a tanking or AFK team racks up few turnovers, so leading TO says nothing about skill.";}
+ else if(b==="boom"){title="Boom / Bust";var o=orderBy(C.boomBust,"rank");heads=["Team","Best week","Worst week","Consistency (SD)","Rank"];
+  rows=o.map(function(id){var r=C.boomBust[id];return h("tr",null,[teamTh(id),td("W"+r.best.week+" · "+P.fmtPts(r.best.total),"wide"),td("W"+r.worst.week+" · "+P.fmtPts(r.worst.total),"wide"),td(r.stdev.toFixed(2),P.rankCls(r.rank,n)),td(String(r.rank),"rank")]);});
+  note="Best / worst week by roto total. Consistency = standard deviation (population) of the weekly roto totals; lower = steadier, and rank 1 is the steadiest.";}
+ else{title="Power Rank";var o=orderBy(C.power,"rank");heads=["Team","Season Roto","Weekly Roto","Season All-Play","Real Record","Average","Power"];
+  rows=o.map(function(id){var r=C.power[id],tr=h("tr",null,[teamTh(id)]);["seasonRoto","weeklyRoto","seasonAllPlay","realRecord"].forEach(function(k){tr.appendChild(td(r.ranks[k]==null?"–":String(r.ranks[k]),P.rankCls(r.ranks[k],n)));});
+   tr.appendChild(td(r.avg==null?"–":r.avg.toFixed(2)));tr.appendChild(td(String(r.rank),"rank"));return tr;});
+  note="Formula: the plain average of a team's rank on Season Roto, Weekly Roto Points, Season All-Play and Real Record (ranked by real Win%); lowest average = 1. No weights.";}
+ return sheet("data",sTitle(title),sub,[scroller(table(heads,rows,groups,b==="catluck"?"luck":null))],note);}
+
+function seasonSheet(){var b=boardOf(),s=DOC.views.season;
+ if(b==="roto")return rotoSheet(s,lg()+" Roto Rank "+span(s).replace("Weeks ","Season, Weeks "),"Category-by-category roto points on the season's summed totals • higher is better • ties share the points");
+ if(b==="totals")return statsSheet(s,sTitle("Stats"),"Raw season totals • percentages from summed makes and attempts",false);
+ if(b==="matrix")return matrixSheet(s,sTitle("All-Play Matrix"),"How every team fared against every other team, weeks added up",null);
+ return boardSheet(b);}
+function weekSheet(){var w=weekNo(),v=DOC.views["w"+w],v_=viewOf();
+ if(v_==="stats")return statsSheet(v,lg()+" Stats Week "+w,"Raw weekly totals • score column shows the actual Yahoo matchup score",true);
+ if(v_==="allplay")return matrixSheet(v,lg()+" All-Play Matrix Week "+w,"How every team would have fared against every other team this week",w);
+ return rotoSheet(v,lg()+" Roto Rank Week "+w,"Category-by-category roto points • higher is better • ties share the points");}
+
+function measure(){var m=$("hmeta")||h("meta",{id:"hmeta",name:"report-height"}),s=document.querySelector(".sheet");if(!s)return;
+ m.setAttribute("content",String(Math.ceil(s.getBoundingClientRect().bottom+window.pageYOffset)));document.head.appendChild(m);}
+function render(){var main=$("main");main.textContent="";if(!DOC)return;
+ document.title=lg()+" · roto";
+ main.appendChild(S.season?seasonSheet():weekSheet());
+ drawStrip();drawStatus();drawNav();pushUrl();
+ try{document.body.setAttribute("data-ready","1");}catch(e){}measure();}
+function update(){render();}
+function fail(msg){$("main").textContent="";$("main").appendChild(h("section",{class:"sheet"},[h("div",{class:"in"},[h("div",{class:"msg err"},[h("b",{text:"Could not load the report"}),msg])])]));}
+function accept(d){if(!d||!d.views||!d.views.season||!d.composites)throw new Error("not a roto report file (schema 2)");DOC=d;render();}
+function srcFor(){if(SRC)return SRC;return LEAGUE&&REPO?"https://raw.githubusercontent.com/"+REPO+"/data/"+LEAGUE+"/report.json":"report.json";}
+function load(){if(window.__REPORT__){try{accept(window.__REPORT__);}catch(e){fail(String(e.message||e));}return;}
+ if(!SRC&&!LEAGUE&&REPO&&!STATIC){   /* the bare homepage: open the first league in leagues.json (each league has its own address, <site>/<id>/) */
+  fetch("leagues.json",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(j){LEAGUE=String((j.leagues||[])[0]||"");go();},function(){go();});return;}
+ go();}
+function go(){var SRC_=srcFor();
+ fetch(SRC_+(SRC_.indexOf("?")<0?"?t="+Math.floor(Date.now()/60000):""),{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+  .then(accept,function(e){if(!DOC)fail(String(e.message||e));}).catch(function(e){if(!DOC)fail(String(e.message||e));});}
+$("prev").onclick=function(){step(-1);};$("next").onclick=function(){step(1);};
+document.addEventListener("keydown",function(e){if(!DOC||e.altKey||e.ctrlKey||e.metaKey)return;if(e.key==="ArrowLeft"){step(-1);e.preventDefault();}else if(e.key==="ArrowRight"){step(1);e.preventDefault();}});
+if(!STATIC&&!window.__REPORT__){setInterval(function(){if(!document.hidden)load();},REFRESH);document.addEventListener("visibilitychange",function(){if(!document.hidden)load();});}
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){if(DOC){render();document.body.setAttribute("data-fonts","1");}});
+load();
+})();
+</script>
+</body>
+</html>

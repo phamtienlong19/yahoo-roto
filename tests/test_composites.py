@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 from fractions import Fraction as F
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
@@ -153,6 +154,12 @@ class Season(unittest.TestCase):
         k = c["categoryKings"]
         self.assertEqual((k["PTS"]["season"]["team"], k["PTS"]["season"]["value"]), (2, 60))
         self.assertEqual((k["PTS"]["week"]["team"], k["PTS"]["week"]["week"], k["PTS"]["week"]["value"]), (2, 2, 40))
+        self.assertNotIn("TO", k)                                                              # turnovers are not a Category King (tanking / AFK teams); they still count in Category Luck
+
+    def test_kings_fewer_is_better_when_a_lower_category_is_tallied(self):
+        with mock.patch.object(yr, "KINGS_SKIP", ()):
+            _, _, _, c = build()
+        k = c["categoryKings"]
         self.assertEqual((k["TO"]["season"]["team"], k["TO"]["season"]["value"]), (4, 6))      # fewer is better
         self.assertEqual((k["TO"]["week"]["team"], k["TO"]["week"]["week"]), (4, 1))
         self.assertEqual(k["TO"]["week"]["also"], [[2, 2]])                                    # team 2 also had 1 TO, in week 2

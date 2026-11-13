@@ -305,6 +305,11 @@ def roto(stats_by_team, specs):
     return res, ranked
 
 
+# Categories left out of the Category Kings board only: a tanking or AFK team racks up few turnovers, so leading TO says nothing about skill.
+# (Every other board, Category Luck included, still counts all categories.)
+KINGS_SKIP = ("TO",)
+
+
 # ------------------------------------------------------------------ the run
 def cat_result(x, y, sp):
     """One category, x against y: 1 = x wins, 0 = level, -1 = x loses (fewer is better for a `lower` category)."""
@@ -571,7 +576,7 @@ def composites(weeks_data, cores, specs, ids, season):
                         "byCat": {cat: {"real": _plain(r), "expected": _plain(e), "diff": _plain(r - e)} for cat, (r, e) in cl[t].items()}, "rank": rk[t]} for t in ids}
     # 5 category kings: the season leader and the best single week, per category
     kings = {}
-    for sp in specs:
+    for sp in (sp for sp in specs if sp["cat"] not in KINGS_SKIP):
         cat = sp["cat"]
         def best(items):                                                      # items: [(teamId, week|None, value)] -> the best, with level holders listed
             items = [i for i in items if i[2] is not None]

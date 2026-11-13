@@ -66,10 +66,16 @@ table{border-collapse:separate;border-spacing:0}
 .st th.tot,.st td.tot{background-image:linear-gradient(#2a6fa90d,#2a6fa90d)}
 .st td.tot{font-weight:800;padding:.26em .45em}
 .st th.tot{padding-left:.45em;padding-right:.45em}
-.st td.cat{min-width:0;padding-left:.1em;padding-right:.1em}
+.st.luck th.team{min-width:clamp(108px,15cqw,250px);max-width:clamp(108px,15cqw,250px)}
+.st td.cat{min-width:0;padding-left:.35em;padding-right:.35em}
 .st th.sep,.st th.tot{min-width:0}
 .st td.pos{color:#1d7a46}.st td.neg{color:#b02a46}
 .st td.cat{font-weight:520}
+.st td.king{line-height:1.15}.st td.king .kn{font-family:Inter,"Noto Sans","Segoe UI",Arial,sans-serif;font-weight:760;font-size:1.06em;color:var(--ink);letter-spacing:-.01em}
+.st td.king .small{margin-top:.15em;color:#8a97a5}
+.st td.kv{font-weight:700;color:var(--blue);background-image:linear-gradient(#2a6fa90f,#2a6fa90f)}
+.st td.kw{color:#6a7785;font-weight:600}
+.st th.left.sep,.st td.left.sep{padding-left:1em}
 .st td.left,.st th.left{text-align:left;padding-left:.8em}
 .st td.wide{min-width:6em}
 .chips{display:inline-flex;gap:.25em;vertical-align:middle}
@@ -198,8 +204,8 @@ function sheet(kind,title,sub,body,note){
 function scroller(t){return h("div",{class:"tscroll"},[t]);}
 function th(t,c){return h("th",{class:c||null,text:t});}
 function teamTh(id){return h("th",{class:"team"+(String(id)===ME?" me":""),title:name(id),text:name(id)});}
-function table(heads,rows,groups){var tr=h("tr"),gr=null;if(groups){gr=h("tr",{class:"grp"});groups.forEach(function(g){gr.appendChild(h("th",{colspan:g[1],class:g[2]||null},[h("span",{text:g[0]})]));});}heads.forEach(function(x,i){tr.appendChild(typeof x==="string"?th(x,i===0?"team":null):th(x[0],x[1]));});
- return h("table",{class:"st"},[h("thead",null,gr?[gr,tr]:[tr]),h("tbody",null,rows)]);}
+function table(heads,rows,groups,cls){var tr=h("tr"),gr=null;if(groups){gr=h("tr",{class:"grp"});groups.forEach(function(g){gr.appendChild(h("th",{colspan:g[1],class:g[2]||null},[h("span",{text:g[0]})]));});}heads.forEach(function(x,i){tr.appendChild(typeof x==="string"?th(x,i===0?"team":null):th(x[0],x[1]));});
+ return h("table",{class:"st"+(cls?" "+cls:"")},[h("thead",null,gr?[gr,tr]:[tr]),h("tbody",null,rows)]);}
 function td(text,c){return h("td",{class:c||null,text:text});}
 
 function rotoSheet(v,title,sub){var n=v.order.length,cats=DOC.categories,ids=v.order,tp=P.places(ids.map(function(i){return v.teams[i].total;}));
@@ -234,7 +240,7 @@ function boardSheet(b){var C=DOC.composites,n=Object.keys(DOC.teams).length,s=DO
  weekly:"Each week's roto total added up",allplay:"Every week's all-play record added up",real:"Actual matchup record next to what the weekly all-play Win% predicted",
  catluck:"Categories won in real matchups next to what each category's all-play share predicted",
  kings:"Who led each category over the season and in a single week",boom:"Best week, worst week and how steady each team was",power:"The average of a team's ranks on four boards, nothing hidden"}[b];
- var rows,heads,note,title;
+ var rows,heads,note,title,groups=null;
  if(b==="weekly"){title="Weekly Roto Points";var o=orderBy(C.weeklyRoto,"rank"),ps=P.places(o.map(function(i){return C.weeklyRoto[i].sum;}));
   heads=["Team","Points","Avg / week","Weekly ranks","Rank"];
   rows=o.map(function(id,i){var r=C.weeklyRoto[id];return h("tr",null,[teamTh(id),td(P.fmtPts(r.sum),"total "+P.cls(ps[i],n)),td(r.avg.toFixed(2),""),h("td",{class:"wide"},[chips(r.weekRanks,n)]),td(String(r.rank),"rank")]);});
@@ -251,12 +257,15 @@ function boardSheet(b){var C=DOC.composites,n=Object.keys(DOC.teams).length,s=DO
   heads=["Team",["Real cats","tot"],["Expected cats","tot"],["Luck","tot"]].concat(cats.map(function(c,k){return [c.cat,k?null:"sep"];}),[["Rank","sep"]]);
   rows=o.map(function(id,i){var r=cl[id],tr=h("tr",null,[teamTh(id),td(String(r.real),"tot"),td(r.expected.toFixed(2),"tot"),td(P.signed(r.luck,2),"tot total "+(r.luck>0.005?"pos":r.luck<-0.005?"neg":""))]);
    cats.forEach(function(c,k){tr.appendChild(td(P.signed(r.byCat[c.cat].diff,2),"cat "+(k?"":"sep ")+P.cls(cp[k][i],n)));});tr.appendChild(td(String(r.rank),"rank sep"));return tr;});
+  groups=[["",1],["Season totals",3,"tot"],["Luck by category (real − expected)",cats.length,"sep"],["",1,"sep"]];
   note="Real cats = categories won against the actual opponent each week (a level category counts half). Expected cats = in each category, the share of the other teams you would have beaten that week (all-play), added over the weeks. Each category column is real minus expected: positive = you won that category more often than your stats earned, negative = less. Luck = the sum over categories. Example: in a 16-team league a team ranks 12th of 16 in PTS one week, so it beat 4 of 15 teams: expected 0.27; if it also won that category against its opponent (real 1), that is +0.73. Level teams count half.";}
- else if(b==="kings"){title="Category Kings";heads=[["Category","team"],["Season leader","left"],["Best single week","left"]];
-  var f=function(k,wk){if(!k)return "–";var c=DOC.categories.filter(function(x){return x.cat===k.cat;})[0];return name(k.team)+(wk?" (W"+k.week+") ":" ")+P.fmtVal(c.pct,k.value)+((k.also&&k.also.length)?" +"+k.also.length+" level":"");};
-  rows=DOC.categories.map(function(c){var k=C.categoryKings[c.cat],a=k.season&&Object.assign({cat:c.cat},k.season),w=k.week&&Object.assign({cat:c.cat},k.week);
-   return h("tr",null,[h("th",{class:"team",text:c.cat+(c.lower?" (fewer is better)":"")}),td(f(a,false),"left wide"),td(f(w,true),"left wide")]);});
-  note="Season leader: the best summed category total over the season; best single week: the best one-week total in that category (level holders are counted as +N level).";}
+ else if(b==="kings"){title="Category Kings";heads=[["Category","team"],["Leader","left"],["Total",null],["Leader","left sep"],["Week",null],["Best",null]];
+  var kc=DOC.categories.filter(function(c){return C.categoryKings[c.cat];}),
+   who=function(k){return k?h("td",{class:"left king"},[h("span",{class:"kn",text:name(k.team)}),(k.also&&k.also.length)?h("span",{class:"small",text:"+"+k.also.length+" level"}):null].filter(Boolean)):td("–","left");};
+  rows=kc.map(function(c){var k=C.categoryKings[c.cat],a=k.season,w=k.week,tr=h("tr",null,[h("th",{class:"team",text:c.cat+(c.lower?" (fewer is better)":"")}),who(a),td(a?P.fmtVal(c.pct,a.value):"–","kv")]);
+   var wt=who(w);wt.className+=" sep";tr.appendChild(wt);tr.appendChild(td(w?"W"+w.week:"–","kw"));tr.appendChild(td(w?P.fmtVal(c.pct,w.value):"–","kv"));return tr;});
+  groups=[["",1],["Season",2],["Single week",3]];
+  note="Season leader: the best summed category total over the season. Single week: the best one-week total in that category. Level holders show as +N level. Turnovers are left out: a tanking or AFK team racks up few turnovers, so leading TO says nothing about skill.";}
  else if(b==="boom"){title="Boom / Bust";var o=orderBy(C.boomBust,"rank");heads=["Team","Best week","Worst week","Consistency (SD)","Rank"];
   rows=o.map(function(id){var r=C.boomBust[id];return h("tr",null,[teamTh(id),td("W"+r.best.week+" · "+P.fmtPts(r.best.total),"wide"),td("W"+r.worst.week+" · "+P.fmtPts(r.worst.total),"wide"),td(r.stdev.toFixed(2),P.rankCls(r.rank,n)),td(String(r.rank),"rank")]);});
   note="Best / worst week by roto total. Consistency = standard deviation (population) of the weekly roto totals; lower = steadier, and rank 1 is the steadiest.";}
@@ -264,7 +273,7 @@ function boardSheet(b){var C=DOC.composites,n=Object.keys(DOC.teams).length,s=DO
   rows=o.map(function(id){var r=C.power[id],tr=h("tr",null,[teamTh(id)]);["seasonRoto","weeklyRoto","seasonAllPlay","realRecord"].forEach(function(k){tr.appendChild(td(r.ranks[k]==null?"–":String(r.ranks[k]),P.rankCls(r.ranks[k],n)));});
    tr.appendChild(td(r.avg==null?"–":r.avg.toFixed(2)));tr.appendChild(td(String(r.rank),"rank"));return tr;});
   note="Formula: the plain average of a team's rank on Season Roto, Weekly Roto Points, Season All-Play and Real Record (ranked by real Win%); lowest average = 1. No weights.";}
- return sheet("data",sTitle(title),sub,[scroller(table(heads,rows,b==="catluck"?[["",1],["Season totals",3,"tot"],["Luck by category (real − expected)",DOC.categories.length,"sep"],["",1,"sep"]]:null))],note);}
+ return sheet("data",sTitle(title),sub,[scroller(table(heads,rows,groups,b==="catluck"?"luck":null))],note);}
 
 function seasonSheet(){var b=boardOf(),s=DOC.views.season;
  if(b==="roto")return rotoSheet(s,lg()+" Roto Rank "+span(s).replace("Weeks ","Season, Weeks "),"Category-by-category roto points on the season's summed totals • higher is better • ties share the points");
