@@ -524,7 +524,8 @@ def composites(weeks_data, cores, specs, ids, season):
             osc = wk["teams"].get(o, {}).get("score") if o is not None else None
             result = None if sc is None or osc is None else "W" if sc > osc else "L" if sc < osc else "T"
             weekly[str(t)][str(c["week"])] = {"points": c["res"][t]["points"], "total": c["res"][t]["total"], "rank": c["res"][t]["rank"], "allPlay": c["rec"][t],
-                                              "winPct": _plain(win_pct(c["rec"][t])), "score": _plain(sc), "opp": o, "result": result}
+                                              "winPct": _plain(win_pct(c["rec"][t])), "score": _plain(sc), "opp": o, "result": result,
+                                              "catRecord": head_to_head(c["tot"][t], c["tot"][o], specs) if result else None}
     # 1 season roto (the headline board: the season view)
     seasonRoto = {str(t): {"total": season["teams"][str(t)]["total"], "rank": season["teams"][str(t)]["rank"]} for t in ids}
     # 2 weekly roto points: the sum of each week's roto total
@@ -536,21 +537,25 @@ def composites(weeks_data, cores, specs, ids, season):
     rk = comp_rank({t: win_pct(ap[t]) for t in ids})
     seasonAllPlay = {str(t): {"record": ap[t], "winPct": season["teams"][str(t)]["winPct"], "rank": rk[t]} for t in ids}
     # 4 real record vs expected wins; luck = real wins - expected wins (a tied matchup counts half a win; expected wins = the sum of weekly all-play Win%)
+    # The real RANK uses the category record against the actual opponents (W-L-T over every category battle): that is what Yahoo's head-to-head
+    # categories standings show, and with only a few matchups played the matchup record alone leaves many teams level.
     real = {}
     for t in ids:
-        rec, exp = [0, 0, 0], Fraction(0)
+        rec, exp, crec = [0, 0, 0], Fraction(0), [0, 0, 0]
         for w in weeks:
             wv = weekly[str(t)][str(w)]
             if wv["result"] is None:
                 continue
             rec["WLT".index(wv["result"])] += 1
+            crec = [a + b for a, b in zip(crec, wv["catRecord"])]
             exp += win_pct(wv["allPlay"]) or 0
         games = sum(rec)
         wins = Fraction(2 * rec[0] + rec[2], 2)
-        real[t] = {"record": rec, "games": games, "realWins": wins, "expectedWins": exp, "luck": wins - exp, "pct": win_pct(rec) if games else None}
-    rk = comp_rank({t: real[t]["pct"] for t in ids})
+        real[t] = {"record": rec, "games": games, "realWins": wins, "expectedWins": exp, "luck": wins - exp, "pct": win_pct(rec) if games else None,
+                "catRecord": crec, "catPct": win_pct(crec) if sum(crec) else None}
+    rk = comp_rank({t: real[t]["catPct"] for t in ids})
     realRecord = {str(t): {"record": real[t]["record"], "winPct": _plain(real[t]["pct"]), "realWins": _plain(real[t]["realWins"]),
-                           "expectedWins": _plain(real[t]["expectedWins"]), "luck": _plain(real[t]["luck"]), "rank": rk[t]} for t in ids}
+                           "expectedWins": _plain(real[t]["expectedWins"]), "luck": _plain(real[t]["luck"]), "catRecord": real[t]["catRecord"], "catWinPct": _plain(real[t]["catPct"]), "rank": rk[t]} for t in ids}
     realRank = rk
     # 4b category luck: real category wins against the actual opponent vs the all-play share in each category; diff = real - expected
     cl = {t: {sp["cat"]: [Fraction(0), Fraction(0)] for sp in specs} for t in ids}
