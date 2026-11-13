@@ -31,7 +31,7 @@ This repo is the setup: GitHub Pages serves `index.html` from `main`, and the `R
 3. Share `https://<owner>.github.io/yahoo-roto/?league=<id>&repo=<owner>/yahoo-roto`. The page re-fetches the JSON every 2 minutes while visible and
    says "data is N min old" if the feed stalls. Add `&me=<teamId>` to mark your team, `&week=3&view=allplay` to deep-link.
 
-About 8 Yahoo requests per league per refresh (only the newest week; finished weeks are cached), 1.5 s apart. Keep `leagues.json` small.
+About 12 Yahoo requests per league per refresh (settings, standings, one page for the week list, the 8 pages of the in-progress week for 16 teams, one probe of the next week; finished weeks are cached), 1.5 s apart (~20 s). Keep `leagues.json` small.
 
 ## How roto is computed
 Per category, teams are ranked (worst = 1 point, best = number of teams, level teams share the average place, fewer is better for TO/PF). Season roto adds

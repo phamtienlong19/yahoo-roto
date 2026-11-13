@@ -177,6 +177,7 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(doc["weeks"], [1])
         self.assertEqual([t["teamId"] for t in doc["teams"]], [1, 2])                                               # A wins 4 categories, B has more 3PM
         self.assertEqual(doc["categories"], ["FG%", "FT%", "3PTM", "PTS", "TO"])
+        self.assertEqual(sum(1 for u in fx.urls if "week=2" in u and "matchup" in u), 1)                          # an empty week costs one page, not one per pair
         self.assertEqual(sum(1 for u in fx.urls if "week=1" in u and "matchup" in u), 2)                          # once for the weeks list, once for week 1 (page covers both teams)
 
 

@@ -380,6 +380,8 @@ def collect_week(fx, league, week, team_ids, base):
         got.update(parsed["teams"])
         if parsed["pair"] and sorted(parsed["pair"]) not in pairs:
             pairs.append(sorted(parsed["pair"]))
+        if not has_data({"teams": got}):                                # a week that has not started: the first page says so, skip the other pages
+            break
     return {"week": week, "teams": got, "matchups": pairs}
 
 
