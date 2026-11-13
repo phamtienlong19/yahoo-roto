@@ -2,14 +2,14 @@ name: Roto live
 
 # Lives in the yahoo-roto repo next to yahoo_roto.py, index.html and leagues.json.
 # Keeps a roto report for every league in leagues.json fresh: roughly every 4 minutes on game hours, every 15 otherwise, for ~115 minutes per run, then the
-# run's first step has already queued its successor (GitHub drops many cron triggers; the cron is only the backstop). Read-only GETs of Yahoo's public
+# run's first step has already queued its successor (GitHub drops many cron triggers; the cron is only the backstop, every 15 minutes; the concurrency group below keeps at most one run waiting, so extra ticks are harmless). Read-only GETs of Yahoo's public
 # pages (leagues must be publicly viewable; no sign-in). Output goes to an orphan `data` branch (force-pushed, never grows); the Pages site (index.html)
 # reads <repo>/data/<league>/report.json from raw.githubusercontent.com, so the page refreshes without a deploy.
 #   https://<owner>.github.io/<repo>/?league=<id>&repo=<owner>/<repo>
 
 on:
   schedule:
-    - cron: "5,35 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       league:
