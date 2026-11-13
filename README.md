@@ -28,7 +28,7 @@ This repo is the setup: GitHub Pages serves `index.html` from `main`, and the `R
 1. Settings > Pages: deploy from branch `main`, folder `/`. Settings > Actions > General: workflow permissions "Read and write".
 2. Put your league ids in `leagues.json`. Run the "Roto live" workflow once (Actions tab, optional league id). It loops about 115 minutes per run (every
    ~4 min on game hours, 15 min otherwise), queues its own successor (GitHub drops many cron triggers), and force-pushes `<league>/report.json` to `data`.
-3. Share `https://<owner>.github.io/yahoo-roto/?league=<id>&repo=<owner>/yahoo-roto`. The page re-fetches the JSON every 2 minutes while visible and
+3. Each league has its own address: `https://<owner>.github.io/yahoo-roto/<id>/` (e.g. `/207464/`). Adding a league = add the id to `leagues.json`, run `python3 pages.py` (writes `<id>/index.html`; a test fails if the copies are stale) and commit. The bare site address opens the first league. `?board=catluck` (or any season board) opens the Season tab directly, `&week=3&view=allplay` deep-links a week, `&me=<teamId>` marks your team.
    says "data is N min old" if the feed stalls. Add `&me=<teamId>` to mark your team, `&week=3&view=allplay` to deep-link.
 
 About 12 Yahoo requests per league per refresh (settings, standings, one page for the week list, the 8 pages of the in-progress week for 16 teams, one probe of the next week; finished weeks are cached), 1.5 s apart (~20 s). Keep `leagues.json` small.
