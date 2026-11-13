@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Roto report</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231667ac'/%3E%3Cpath d='M8 22V14M16 22V8M24 22V17' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Geist+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -109,11 +110,28 @@ table{border-collapse:separate;border-spacing:0}
 .msg{padding:48px 16px;text-align:center;color:#51657a;font:600 15px/1.5 Inter,"Noto Sans","Segoe UI",Arial,sans-serif}.msg b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
 .err{color:#a1233a}
 
+.fh{position:fixed;top:0;z-index:30;overflow:hidden;background:#fff;display:none;box-shadow:0 8px 14px -10px #1b365040;border-bottom:1px solid #c9d7e3}
+.fh table{border-collapse:separate;border-spacing:0}
+button:focus-visible,.how summary:focus-visible,th.sortable:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.how{max-width:64ch;margin:-.9em auto 1.5em;text-align:center;font-size:clamp(12px,1.07cqw,17px);color:#4c6072}
+.how summary{cursor:pointer;display:inline-block;list-style:none;padding:.35em .95em;border:1px solid #d3dce4;border-radius:999px;background:#fff;font-weight:600;color:#425464}
+.how summary::-webkit-details-marker{display:none}
+.how summary::before{content:"\24D8\00a0"}
+.how[open] summary{background:#eef3f8}
+.how p{margin:.8em 0 0;line-height:1.55;text-align:left;background:var(--stripe);padding:.85em 1.1em;border-radius:10px}
+.retry{margin-top:14px;font:600 14px Inter,"Noto Sans","Segoe UI",Arial,sans-serif;background:var(--blue);color:#fff;border:0;border-radius:999px;padding:9px 20px;cursor:pointer}
+@media (max-width:700px){
+ nav{position:relative;flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:0 2px 4px;margin-bottom:12px;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+ nav::-webkit-scrollbar{display:none}
+ nav button{flex:0 0 auto;white-space:nowrap}
+}
+body.static .fh{display:none!important}
 body.static{padding:0;background:#fff}
 body.static .weekbar,body.static .status,body.static nav{display:none}
 body.static .wrap{width:100%}
 body.static .sheet{box-shadow:none;width:100%}
-@media print{body{padding:0;background:#fff}.weekbar,.status,nav{display:none}.sheet{box-shadow:none}}
+@media print{.fh{display:none!important}.how{display:none}body{padding:0;background:#fff}.weekbar,.status,nav{display:none}.sheet{box-shadow:none}}
 </style>
 </head>
 <body>
@@ -193,18 +211,25 @@ function drawStatus(){var el=$("status");el.textContent="";var w=weekNo(),a=asOf
  if(live&&a.stale&&!STATIC)el.appendChild(h("span",{class:"stale",text:" · ⚠ data is "+a.min+" min old, the feed may have stalled"}));}
 function drawNav(){var nav=$("nav");nav.textContent="";nav.className=S.season?"sub":"";
  var items=S.season?BOARDS.filter(function(x){return x[0]!=="catluck"||(DOC.composites&&DOC.composites.catLuck);}):VIEWS,on=S.season?boardOf():viewOf();
- items.forEach(function(it){var b=h("button",{class:it[0]===on?"active":"",text:it[1]});b.onclick=function(){setView(it[0]);};nav.appendChild(b);});}
+ items.forEach(function(it){var b=h("button",{class:it[0]===on?"active":"",text:it[1]});b.onclick=function(){setView(it[0]);};nav.appendChild(b);});
+ var a=nav.querySelector(".active");if(a&&nav.scrollWidth>nav.clientWidth)nav.scrollLeft=a.offsetLeft-(nav.clientWidth-a.offsetWidth)/2;}
 
 /* ---- sheets ---- */
 function sheet(kind,title,sub,body,note){
- var inner=[h("h1",{text:title}),h("div",{class:"view-subtitle",text:sub})].concat(body);
- if(note)inner.push(h("div",{class:"note",text:note}));
+ var inner=[h("h1",{text:title}),h("div",{class:"view-subtitle",text:sub})];
+ if(note&&!STATIC){var dt=h("details",{class:"how"},[h("summary",{text:"How to read this"}),h("p",{text:note})]);if(S.how)dt.open=true;dt.addEventListener("toggle",function(){S.how=dt.open;});inner.push(dt);}
+ inner=inner.concat(body);
+ if(note&&STATIC)inner.push(h("div",{class:"note",text:note}));
  if(STATIC){var a=asOf();inner.push(h("div",{class:"stamp",text:(S.season?"Season":"Week "+weekNo())+(S.season||weekNo()===cur()?" (in progress) · as of "+a.text:" · final")}));}
  return h("section",{class:"sheet "+kind},[h("div",{class:"in"},inner)]);}
 function scroller(t){return h("div",{class:"tscroll"},[t]);}
-function th(t,c){return h("th",{class:c||null,text:t});}
+var TIPS={"Real cats":"Categories won against your actual opponent each week (a level category counts half)","Expected cats":"What your stats earned: in each category, the share of the other teams you would have beaten that week, added up",
+ "Luck":"Real minus expected: positive = more wins than your stats earned","Cat W-L-T":"Category record against your actual opponents: how Yahoo ranks category leagues","Cat Win%":"(W + T/2) / (W + L + T) over every category battle",
+ "Matchups":"Weekly matchup record (a tied matchup counts half a win)","Real wins":"Matchups actually won (a tie counts half)","Expected wins":"The sum of each week's all-play Win%","All-Play":"Record against every other team, category by category","Win%":"(W + T/2) / (W + L + T)",
+ "Rank":"1 = best; level teams share a rank","Consistency (SD)":"Standard deviation of the weekly roto totals: lower = steadier"};
+function th(t,c,tip){return h("th",{class:c||null,text:t,title:tip||TIPS[t]||null});}
 function teamTh(id){return h("th",{class:"team"+(String(id)===ME?" me":""),title:name(id),text:name(id)});}
-function table(heads,rows,groups,cls){var tr=h("tr"),gr=null;if(groups){gr=h("tr",{class:"grp"});groups.forEach(function(g){gr.appendChild(h("th",{colspan:g[1],class:g[2]||null},[h("span",{text:g[0]})]));});}heads.forEach(function(x,i){tr.appendChild(typeof x==="string"?th(x,i===0?"team":null):th(x[0],x[1]));});
+function table(heads,rows,groups,cls){var tr=h("tr"),gr=null;if(groups){gr=h("tr",{class:"grp"});groups.forEach(function(g){gr.appendChild(h("th",{colspan:g[1],class:g[2]||null},[h("span",{text:g[0]})]));});}heads.forEach(function(x,i){tr.appendChild(typeof x==="string"?th(x,i===0?"team":null):th(x[0],x[1],x[2]));});
  return h("table",{class:"st"+(cls?" "+cls:"")},[h("thead",null,gr?[gr,tr]:[tr]),h("tbody",null,rows)]);}
 function td(text,c){return h("td",{class:c||null,text:text});}
 
@@ -287,14 +312,42 @@ function weekSheet(){var w=weekNo(),v=DOC.views["w"+w],v_=viewOf();
 
 function measure(){var m=$("hmeta")||h("meta",{id:"hmeta",name:"report-height"}),s=document.querySelector(".sheet");if(!s)return;
  m.setAttribute("content",String(Math.ceil(s.getBoundingClientRect().bottom+window.pageYOffset)));document.head.appendChild(m);}
+function renderKeep(){var y=window.scrollY,xs=[].map.call(document.querySelectorAll(".tscroll"),function(e){return e.scrollLeft;}),ns=$("nav")?$("nav").scrollLeft:0;
+ render();[].forEach.call(document.querySelectorAll(".tscroll"),function(e,i){if(xs[i])e.scrollLeft=xs[i];});window.scrollTo(0,y);updFH();}
 function render(){var main=$("main");main.textContent="";if(!DOC)return;
  document.title=lg()+" · roto";
  main.appendChild(S.season?seasonSheet():weekSheet());
  drawStrip();drawStatus();drawNav();pushUrl();
- try{document.body.setAttribute("data-ready","1");}catch(e){}measure();}
+ try{document.body.setAttribute("data-ready","1");}catch(e){}measure();floatHead();}
+/* Sticky column headers. A CSS sticky <thead> cannot work here: the tables sit in a horizontal scroll box, which also becomes their vertical scroll
+   container. So a copy of the header is pinned to the top of the window (outside .sheet, whose container-type would capture position:fixed) while the
+   real header is scrolled out of view; it follows the table's horizontal scroll. Not used for the PNG export (static mode). */
+var FH=null,FHT=null,FHS=null;
+function updFH(){if(!FH||!FHT||!FHS)return;var r=FHT.getBoundingClientRect(),hh=FH.offsetHeight||0,b=FHS.getBoundingClientRect();
+ var on=r.top<-1&&r.bottom>hh+48&&b.width>0;FH.style.display=on?"block":"none";if(!on)return;
+ FH.style.left=b.left+"px";FH.style.width=FHS.clientWidth+"px";FH.scrollLeft=FHS.scrollLeft;}
+function floatHead(){if(FH){FH.remove();}FH=FHT=FHS=null;if(STATIC)return;
+ var sc=document.querySelector(".tscroll"),t=sc&&sc.querySelector("table"),th=t&&t.tHead;if(!th||!th.rows.length)return;
+ var last=th.rows[th.rows.length-1],c=t.cloneNode(false),cg=document.createElement("colgroup");
+ Array.prototype.forEach.call(last.cells,function(x){var col=document.createElement("col");col.style.width=x.getBoundingClientRect().width+"px";cg.appendChild(col);});
+ c.appendChild(cg);var hc=th.cloneNode(true);c.appendChild(hc);
+ Array.prototype.forEach.call(hc.querySelectorAll("th"),function(x){x.style.minWidth="0";x.style.maxWidth="none";});
+ c.style.fontSize=getComputedStyle(t).fontSize;c.style.width=t.getBoundingClientRect().width+"px";c.style.tableLayout="fixed";
+ FH=h("div",{class:"fh","aria-hidden":"true"},[c]);document.body.appendChild(FH);FHT=t;FHS=sc;
+ sc.addEventListener("scroll",updFH,{passive:true});updFH();}
+window.addEventListener("scroll",updFH,{passive:true});
+(function(){var tm;window.addEventListener("resize",function(){clearTimeout(tm);tm=setTimeout(floatHead,150);});})();
 function update(){render();}
-function fail(msg){$("main").textContent="";$("main").appendChild(h("section",{class:"sheet"},[h("div",{class:"in"},[h("div",{class:"msg err"},[h("b",{text:"Could not load the report"}),msg])])]));}
-function accept(d){if(!d||!d.views||!d.views.season||!d.composites)throw new Error("not a roto report file (schema 2)");DOC=d;render();}
+var RT=null;
+function fail(msg){$("main").textContent="";clearTimeout(RT);
+ var nf=/HTTP 404/.test(msg)&&!SRC,kids=nf?[h("b",{text:"This league's data isn't published yet"}),"A new league appears after the next feed run, usually within a few minutes. This page retries by itself.",h("div",null,[h("button",{class:"retry",text:"Try again",onclick:null})])]
+  :[h("b",{text:"Could not load the report"}),msg];
+ var box=h("div",{class:"msg"+(nf?"":" err")},kids),rb=box.querySelector(".retry");if(rb)rb.onclick=function(){load();};
+ $("main").appendChild(h("section",{class:"sheet"},[h("div",{class:"in"},[box])]));if(nf)RT=setTimeout(load,30000);}
+var LAST="";
+function accept(d){if(!d||!d.views||!d.views.season||!d.composites)throw new Error("not a roto report file (schema 2)");
+ var k=JSON.stringify(d);if(DOC&&k===LAST){drawStatus();return;}      /* a refresh with nothing new must not redraw (it would reset the reader's scroll) */
+ LAST=k;if(DOC)DOC=d,renderKeep();else DOC=d,render();}
 function srcFor(){if(SRC)return SRC;return LEAGUE&&REPO?"https://raw.githubusercontent.com/"+REPO+"/data/"+LEAGUE+"/report.json":"report.json";}
 function load(){if(window.__REPORT__){try{accept(window.__REPORT__);}catch(e){fail(String(e.message||e));}return;}
  if(!SRC&&!LEAGUE&&REPO&&!STATIC){   /* the bare homepage: open the first league in leagues.json (each league has its own address, <site>/<id>/) */
@@ -306,7 +359,7 @@ function go(){var SRC_=srcFor();
 $("prev").onclick=function(){step(-1);};$("next").onclick=function(){step(1);};
 document.addEventListener("keydown",function(e){if(!DOC||e.altKey||e.ctrlKey||e.metaKey)return;if(e.key==="ArrowLeft"){step(-1);e.preventDefault();}else if(e.key==="ArrowRight"){step(1);e.preventDefault();}});
 if(!STATIC&&!window.__REPORT__){setInterval(function(){if(!document.hidden)load();},REFRESH);document.addEventListener("visibilitychange",function(){if(!document.hidden)load();});}
-if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){if(DOC){render();document.body.setAttribute("data-fonts","1");}});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){if(DOC){renderKeep();document.body.setAttribute("data-fonts","1");}});
 load();
 })();
 </script>
