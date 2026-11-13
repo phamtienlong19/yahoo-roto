@@ -34,6 +34,10 @@ class Page(unittest.TestCase):
     def test_places_share_the_average_and_skip_missing(self):
         self.assertEqual(js("RotoPure.places([5,9,5,null,20])"), [1.5, 3, 1.5, None, 4])
 
+    def test_sort_key_reads_the_number_in_a_cell(self):
+        got = js('["+4.79","\u22120.12",".518","W2","W3 \u00b7 105.5","18-8-1","20.5","1978","\u2013","Hai | Bulls Dynasty","0.00",""].map(RotoPure.sortKey)')
+        self.assertEqual(got, [4.79, -0.12, 0.518, 2, 105.5, 18, 20.5, 1978, None, None, 0, None])
+
     def test_matrix_margin_buckets(self):
         got = js("[9,5,4,3,2,1,0,-1,-2,-3,-4,-5,-9,0.4,-0.4].map(RotoPure.matrixCls)")
         self.assertEqual(got, ["dark-green", "dark-green", "green", "green", "light-green", "light-green", "white", "light-red", "light-red", "red", "red", "dark-red", "dark-red",
