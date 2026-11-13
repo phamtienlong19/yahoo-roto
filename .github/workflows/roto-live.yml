@@ -1,0 +1,71 @@
+name: Roto live
+
+# Lives in the yahoo-roto repo next to yahoo_roto.py, index.html and leagues.json.
+# Keeps a roto report for every league in leagues.json fresh: roughly every 4 minutes on game hours, every 15 otherwise, for ~115 minutes per run, then the
+# run's first step has already queued its successor (GitHub drops many cron triggers; the cron is only the backstop). Read-only GETs of Yahoo's public
+# pages (leagues must be publicly viewable; no sign-in). Output goes to an orphan `data` branch (force-pushed, never grows); the Pages site (index.html)
+# reads <repo>/data/<league>/report.json from raw.githubusercontent.com, so the page refreshes without a deploy.
+#   https://<owner>.github.io/<repo>/?league=<id>&repo=<owner>/<repo>
+
+on:
+  schedule:
+    - cron: "5,35 * * * *"
+  workflow_dispatch:
+    inputs:
+      league:
+        description: "Run once for this league id only (leave empty to loop over leagues.json)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: roto-live
+  cancel-in-progress: false
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Queue the next run (starts when this one ends; the cron is only the backstop)
+        if: ${{ inputs.league == '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run roto-live.yml --ref "${GITHUB_REF_NAME}" || echo "could not queue the next run (the cron will)"
+
+      - name: Build and publish the reports
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ONE: ${{ inputs.league }}
+        run: |
+          set -u
+          end=$(( $(date +%s) + 6900 )); mkdir -p cache
+          pick() { h=$((10#$(date -u +%H))); d=$(date -u +%u)
+            if [ "$h" -ge 22 ] || [ "$h" -le 7 ] || { [ "$h" -ge 16 ] && [ "$d" -ge 6 ]; }; then echo 240; else echo 900; fi; }
+          # the data branch carries the finished weeks' cache between runs
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then git fetch -q --depth=1 origin data && git archive FETCH_HEAD _cache 2>/dev/null | tar -x -C cache || true; fi
+          while :; do
+            start=$(date +%s); out=$(mktemp -d)
+            leagues="$ONE"; [ -n "$leagues" ] || leagues=$(python3 -c "import json;print(' '.join(map(str,json.load(open('leagues.json'))['leagues'])))")
+            for id in $leagues; do
+              mkdir -p "$out/$id"
+              python3 yahoo_roto.py "$id" --report "$out/$id" --cache cache/_cache || echo "league $id failed (the previous report stays)"
+              rm -f "$out/$id/index.html"        # the Pages site renders report.json; no per-league html on the data branch
+            done
+            mkdir -p "$out/_cache" && cp -R cache/_cache/. "$out/_cache/" 2>/dev/null || true
+            ( cd "$out" && git init -q -b data && git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com" \
+              && git add -A && git commit -q -m "roto $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              && git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data ) || echo "publish failed"
+            [ -n "$ONE" ] && break
+            rest=$(( $(pick) - ($(date +%s) - start) )); [ "$rest" -gt 0 ] || continue
+            [ $(( $(date +%s) + rest )) -lt "$end" ] || break
+            sleep "$rest"
+          done

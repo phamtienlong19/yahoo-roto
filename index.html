@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Roto report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#12264d;--mute:#66748d;--line:#e6eaf3;--bg:#f4f6fb;--card:#fff;--acc:#2c3796;--sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--mono:"Roboto Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 14px/1.4 var(--sans);padding:0 0 32px}
+.wrap{max-width:1100px;margin:0 auto;padding:0 12px}
+header.top{padding:16px 0 8px}
+h1{margin:0;font:800 20px/1.2 var(--sans);letter-spacing:-.01em}
+.sub{margin-top:4px;color:var(--mute);font:600 12px/1.4 var(--sans)}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tabs{display:flex;gap:4px;background:#e4e9f4;border-radius:12px;padding:3px}
+.tabs button{border:0;background:transparent;padding:8px 14px;border-radius:9px;font:700 13px var(--sans);color:var(--mute);cursor:pointer}
+.tabs button[aria-selected=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(18,38,77,.15)}
+select{padding:9px 10px;border:1px solid #d5dbe9;border-radius:10px;background:#fff;font:700 13px var(--sans);color:var(--ink)}
+.stamp{margin-left:auto;color:var(--mute);font:600 11.5px var(--sans)}.stamp.stale{color:#a1233a}
+.card{background:var(--card);border-radius:16px;box-shadow:0 1px 2px rgba(18,38,77,.06),0 6px 20px rgba(18,38,77,.05);overflow:hidden}
+.card h2{margin:0;padding:14px 14px 4px;font:800 11px var(--sans);letter-spacing:.1em;color:var(--acc);text-transform:uppercase}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+table{border-collapse:separate;border-spacing:0;width:100%}
+th,td{padding:8px 6px;text-align:center;white-space:nowrap;border-top:1px solid var(--line);font:600 12.5px var(--mono)}
+thead th{border-top:0;font:800 10.5px var(--sans);letter-spacing:.06em;color:var(--mute);background:#fff}
+td.t,th.t{text-align:left;font:700 13px var(--sans);position:sticky;left:0;background:#fff;z-index:1;max-width:190px;overflow:hidden;text-overflow:ellipsis;padding-left:12px;border-right:1px solid var(--line)}
+td.n{color:var(--mute);width:28px;font-size:12px}
+td.big{font-weight:700;font-size:14px}
+.h3{background:#a4e4b9;color:#17492b}.h2{background:#d0f1dd;color:#17492b}.h1{background:#ebf8f0;color:#1d3b2a}.h0{background:#fff}
+.h-1{background:#fdecee;color:#5c1f2a}.h-2{background:#f6cbd1;color:#6a1f2c}.h-3{background:#efadb8;color:#6a1f2c}
+.me{outline:2px solid var(--acc);outline-offset:-2px}
+.mx td,.mx th{padding:7px 4px;min-width:38px;font-size:11.5px}.mx td.t,.mx th.t{min-width:150px}
+.mx td.self{background:#eef1f8;color:#b4bdd0}
+.foot{padding:10px 14px 14px;color:var(--mute);font:600 11.5px/1.5 var(--sans)}
+.msg{padding:28px 16px;text-align:center;color:var(--mute);font:600 14px/1.5 var(--sans)}.msg b{display:block;color:var(--ink);font-size:16px;margin-bottom:6px}
+.err{color:#a1233a}
+body.static{padding:0;background:#fff}body.static .bar,body.static header.top .sub a{display:none}body.static .card{box-shadow:none;border-radius:0}body.static .wrap{padding:0;max-width:none}
+body.static header.top{padding:16px 14px 6px}
+@media (max-width:520px){h1{font-size:18px}.tabs button{padding:8px 11px}.stamp{flex-basis:100%;margin-left:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><h1 id="ttl">Roto report</h1><div class="sub" id="sub">Loading…</div></header>
+<div class="bar" id="bar">
+ <div class="tabs" role="tablist"><button role="tab" data-v="roto" aria-selected="true">Roto</button><button role="tab" data-v="raw" aria-selected="false">Raw stats</button><button role="tab" data-v="allplay" aria-selected="false">All-play</button></div>
+ <select id="wk" aria-label="Period"></select>
+ <span class="stamp" id="stamp"></span>
+</div>
+<main id="main"><div class="card"><div class="msg">Loading…</div></div></main>
+</div>
+<script>
+(function(){
+"use strict";
+var Q=new URLSearchParams(location.search),STATIC=Q.get("static")==="1",LEAGUE=Q.get("league")||"",
+ SRC=Q.get("data")||(LEAGUE?"https://raw.githubusercontent.com/"+(Q.get("repo")||"")+"/data/"+LEAGUE+"/report.json":"report.json"),
+ REFRESH=120000,STALE=15*60000,ME=Q.get("me")||"",DOC=null,VIEW=Q.get("view")||"roto",PERIOD=Q.get("week")?"w"+Q.get("week"):"season";
+if(STATIC)document.body.classList.add("static");
+function $(id){return document.getElementById(id);}
+function h(tag,attrs,kids){var e=document.createElement(tag);for(var k in attrs||{}){if(k==="text")e.textContent=attrs[k];else e.setAttribute(k,attrs[k]);}(kids||[]).forEach(function(c){if(c)e.appendChild(c);});return e;}
+function heat(p,n){if(p==null)return"h0";var s=Math.round((p-(n+1)/2)/(n*2.5/16));return"h"+Math.max(-3,Math.min(3,s));}
+function fmt(cat,v){if(v==null)return"–";return cat.pct?v.toFixed(3).replace(/^0/,""):(Math.round(v*100)/100).toString();}
+function pts(p){return p==null?"–":(p%1?p.toFixed(1):String(p));}
+function title(){var d=DOC;$("ttl").textContent=(d.leagueName||"Yahoo league "+d.league);document.title=$("ttl").textContent+" · roto";}
+function periodSelect(){var d=DOC,sel=$("wk"),cur=PERIOD;sel.textContent="";
+ sel.appendChild(h("option",{value:"season",text:d.views.season.label}));
+ d.weeks.slice().reverse().forEach(function(w){sel.appendChild(h("option",{value:"w"+w,text:"Week "+w+(w===d.inProgressWeek?" (in progress)":"")}));});
+ if(!d.views[cur])cur="season";PERIOD=cur;sel.value=cur;}
+function head(cols){var tr=h("tr");cols.forEach(function(c,i){tr.appendChild(h("th",{class:i===1?"t":"",text:c}));});return h("thead",null,[tr]);}
+function nameOf(id){return DOC.teams[id]||("Team "+id);}
+function rowsOrder(v){return v.order.map(String);}
+function rotoCard(v){var d=DOC,n=v.order.length,cats=d.categories,t=h("table"),cols=["#","Team","ROTO"].concat(cats.map(function(c){return c.cat;}));
+ t.appendChild(head(cols));var tb=h("tbody");
+ rowsOrder(v).forEach(function(id){var r=v.teams[id],tr=h("tr",id===ME?{class:"me"}:null);
+  tr.appendChild(h("td",{class:"n",text:String(r.rank)}));tr.appendChild(h("td",{class:"t",text:nameOf(id),title:nameOf(id)}));tr.appendChild(h("td",{class:"big",text:r.total.toFixed(1)}));
+  cats.forEach(function(c){var p=r.points[c.cat];tr.appendChild(h("td",{class:heat(p,n),text:pts(p)}));});tb.appendChild(tr);});
+ t.appendChild(tb);return card("Roto points · "+v.label,t,"Each category: worst team 1 point … best team "+n+"; level teams share the places. Turnovers: fewer is better. Derived from the weekly matchup totals, not a Yahoo number.");}
+function rawCard(v){var d=DOC,n=v.order.length,cats=d.categories,t=h("table"),cols=["#","Team"].concat(cats.map(function(c){return c.cat;}));
+ t.appendChild(head(cols));var tb=h("tbody");
+ rowsOrder(v).forEach(function(id){var r=v.teams[id],tr=h("tr",id===ME?{class:"me"}:null);
+  tr.appendChild(h("td",{class:"n",text:String(r.rank)}));tr.appendChild(h("td",{class:"t",text:nameOf(id),title:nameOf(id)}));
+  cats.forEach(function(c){tr.appendChild(h("td",{class:heat(r.points[c.cat],n),text:fmt(c,r.values[c.cat])}));});tb.appendChild(tr);});
+ t.appendChild(tb);return card("Raw stats · "+v.label,t,"Category totals; colour shows where the total ranks among the "+n+" teams. Percentages are summed makes over summed attempts.");}
+function apCell(c){if(!c)return h("td",{class:"self",text:"·"});var m=c[0]-c[1],s=Math.max(-3,Math.min(3,Math.round(m/2)));return h("td",{class:"h"+(m===0?0:s===0?(m>0?1:-1):s),text:c[0]+"-"+c[1]+(c[2]?"-"+c[2]:"")});}
+function allCard(v){var d=DOC,ids=rowsOrder(v),t=h("table",{class:"mx"}),tr=h("tr");
+ tr.appendChild(h("th",{text:"#"}));tr.appendChild(h("th",{class:"t",text:"Team · all-play W-L-T"}));ids.forEach(function(id,i){tr.appendChild(h("th",{text:String(i+1)}));});t.appendChild(h("thead",null,[tr]));
+ var tb=h("tbody");
+ ids.forEach(function(a,ri){var r=v.teams[a],row=h("tr",a===ME?{class:"me"}:null);row.appendChild(h("td",{class:"n",text:String(ri+1)}));
+  var rec=r.allPlay;row.appendChild(h("td",{class:"t",title:nameOf(a),text:nameOf(a)+"  "+rec[0]+"-"+rec[1]+"-"+rec[2]}));
+  ids.forEach(function(b){row.appendChild(apCell(a===b?null:v.matrix[a][b]));});tb.appendChild(row);});
+ t.appendChild(tb);return card("All-play · "+v.label,t,"Each cell: the row team's category record against the column team (columns follow the row order). Green = the row team would win that matchup.");}
+function card(ttl,tbl,foot){return h("div",{class:"card"},[h("h2",{text:ttl}),h("div",{class:"scroll"},[tbl]),h("div",{class:"foot",text:foot})]);}
+function render(){var d=DOC,main=$("main");main.textContent="";if(!d){return;}
+ var v=d.views[PERIOD]||d.views.season;
+ title();$("sub").textContent=(d.scoring||"")+" · "+d.categories.length+" categories · "+Object.keys(d.teams).length+" teams"+(d.skipped&&d.skipped.length?" · skipped: "+d.skipped.join(", "):"");
+ main.appendChild(VIEW==="raw"?rawCard(v):VIEW==="allplay"?allCard(v):rotoCard(v));
+ stamp();if(STATIC)$("sub").textContent+=" · "+$("stamp").textContent;
+ [].forEach.call(document.querySelectorAll(".tabs button"),function(b){b.setAttribute("aria-selected",b.getAttribute("data-v")===VIEW?"true":"false");});
+ var meta=$("h")||h("meta",{id:"h",name:"report-height"});meta.setAttribute("content",String(Math.ceil(document.querySelector(".wrap").getBoundingClientRect().bottom)));document.head.appendChild(meta);}
+function stamp(){var el=$("stamp");if(!DOC){return;}var t=new Date(DOC.asOf),age=Date.now()-t.getTime(),hh=t.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+ var inprog=PERIOD==="w"+DOC.inProgressWeek||PERIOD==="season";
+ el.textContent="As of "+hh+(inprog?" · week "+DOC.inProgressWeek+" in progress":"")+(age>STALE?" · data is "+Math.round(age/60000)+" min old":"");el.className="stamp"+(age>STALE?" stale":"");}
+function fail(msg){$("main").textContent="";$("main").appendChild(h("div",{class:"card"},[h("div",{class:"msg err"},[h("b",{text:"Could not load the report"}),document.createTextNode(msg)])]));$("sub").textContent="";}
+function load(){if(window.__REPORT__){DOC=window.__REPORT__;periodSelect();render();return;}fetch(SRC+(SRC.indexOf("?")<0?"?t="+Math.floor(Date.now()/60000):""),{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}).then(function(d){
+  if(!d||!d.views||!d.views.season)throw new Error("not a roto report file");DOC=d;periodSelect();render();},function(e){if(!DOC)fail(String(e.message||e));});}
+[].forEach.call(document.querySelectorAll(".tabs button"),function(b){b.addEventListener("click",function(){VIEW=b.getAttribute("data-v");render();});});
+$("wk").addEventListener("change",function(){PERIOD=this.value;render();});
+if(!STATIC&&!window.__REPORT__)setInterval(function(){if(!document.hidden)load();},REFRESH);
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&!STATIC&&!window.__REPORT__)load();});
+if(window.document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){if(DOC)render();});
+load();
+})();
+</script>
+</body>
+</html>
