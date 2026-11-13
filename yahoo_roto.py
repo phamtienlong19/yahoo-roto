@@ -306,19 +306,36 @@ def roto(stats_by_team, specs):
 
 
 # ------------------------------------------------------------------ the run
+def cat_result(x, y, sp):
+    """One category, x against y: 1 = x wins, 0 = level, -1 = x loses (fewer is better for a `lower` category)."""
+    if x == y:
+        return 0
+    return 1 if (x < y) == sp["lower"] else -1
+
+
 def head_to_head(a, b, specs):
-    w = l = t = 0
+    r = [0, 0, 0]
     for sp in specs:
         x, y = cat_value(a, sp), cat_value(b, sp)
         if x is None or y is None:
             continue
-        if x == y:
-            t += 1
-        elif (x < y) == sp["lower"]:
-            w += 1
-        else:
-            l += 1
-    return [w, l, t]
+        r[{1: 0, -1: 1, 0: 2}[cat_result(x, y, sp)]] += 1
+    return r
+
+
+def cat_play(stats_by_team, specs):
+    """Per team and category, the share of the other teams it would have beaten (a level team counts half): {team: {cat: Fraction}}.
+    This is the expected category win of that team that week; a category with a missing value is left out."""
+    ids = sorted(stats_by_team)
+    out = {t: {} for t in ids}
+    for sp in specs:
+        vals = {t: cat_value(stats_by_team[t], sp) for t in ids}
+        if any(v is None for v in vals.values()) or len(ids) < 2:
+            continue
+        for t in ids:
+            pts = sum(Fraction(cat_result(vals[t], vals[o], sp) + 1, 2) for o in ids if o != t)
+            out[t][sp["cat"]] = pts / (len(ids) - 1)
+    return out
 
 
 def all_play(stats_by_team, specs):
@@ -530,6 +547,28 @@ def composites(weeks_data, cores, specs, ids, season):
     realRecord = {str(t): {"record": real[t]["record"], "winPct": _plain(real[t]["pct"]), "realWins": _plain(real[t]["realWins"]),
                            "expectedWins": _plain(real[t]["expectedWins"]), "luck": _plain(real[t]["luck"]), "rank": rk[t]} for t in ids}
     realRank = rk
+    # 4b category luck: real category wins against the actual opponent vs the all-play share in each category; diff = real - expected
+    cl = {t: {sp["cat"]: [Fraction(0), Fraction(0)] for sp in specs} for t in ids}
+    for c in cores:
+        wk = wk_by[c["week"]]
+        expct = cat_play(c["tot"], specs)
+        opp = {}
+        for a, b in wk.get("matchups", []):
+            opp[a], opp[b] = b, a
+        for t in ids:
+            o = opp.get(t)
+            if o is None or wk["teams"].get(t, {}).get("score") is None or wk["teams"].get(o, {}).get("score") is None:
+                continue
+            for sp in specs:
+                x, y = cat_value(c["tot"][t], sp), cat_value(c["tot"][o], sp)
+                if x is None or y is None:
+                    continue
+                cl[t][sp["cat"]][0] += Fraction(cat_result(x, y, sp) + 1, 2)
+                cl[t][sp["cat"]][1] += expct[t][sp["cat"]]
+    luck = {t: sum(r - e for r, e in cl[t].values()) for t in ids}
+    rk = comp_rank(luck)
+    catLuck = {str(t): {"real": _plain(sum(r for r, _ in cl[t].values())), "expected": _plain(sum(e for _, e in cl[t].values())), "luck": _plain(luck[t]),
+                        "byCat": {cat: {"real": _plain(r), "expected": _plain(e), "diff": _plain(r - e)} for cat, (r, e) in cl[t].items()}, "rank": rk[t]} for t in ids}
     # 5 category kings: the season leader and the best single week, per category
     kings = {}
     for sp in specs:
@@ -563,7 +602,7 @@ def composites(weeks_data, cores, specs, ids, season):
         avg[t] = Fraction(sum(got), len(got)) if got else None
     rk = comp_rank(avg, high=False)
     power = {str(t): {"ranks": comp[t], "avg": _plain(avg[t]), "rank": rk[t]} for t in ids}
-    return {"weeks": weeks, "weekly": weekly, "seasonRoto": seasonRoto, "weeklyRoto": weeklyRoto, "seasonAllPlay": seasonAllPlay, "realRecord": realRecord,
+    return {"weeks": weeks, "weekly": weekly, "seasonRoto": seasonRoto, "weeklyRoto": weeklyRoto, "seasonAllPlay": seasonAllPlay, "realRecord": realRecord, "catLuck": catLuck,
             "categoryKings": kings, "boomBust": boomBust, "power": power}
 
 
@@ -639,7 +678,7 @@ def _fmt(cat, v):
 
 # ------------------------------------------------------------------ files: self-contained HTML and the three images
 IMAGES = (("roto", "roto", 1680), ("stats", "stats", 1680), ("allplay", "allplay", 2600))        # (page view, file name, css width); drawn at device scale 1.5
-SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
+SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "catluck", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
 SEASON_WIDTH = 1680
 SCALE = 1.5
 

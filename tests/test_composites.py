@@ -122,6 +122,20 @@ class Season(unittest.TestCase):
         self.assertEqual([a[str(t)]["rank"] for t in IDS], [3, 1, 1, 3])
         self.assertAlmostEqual(a["2"]["winPct"], 3.5 / 6)
 
+    def test_category_luck_real_cats_vs_all_play_share(self):
+        _, _, _, c = build()
+        cl = c["catLuck"]
+        # worked by hand: week 1 PTS shares 5/6, 1/3, 5/6, 0; TO (fewer is better) 2/3, 1/6, 1/6, 1; week 2 PTS 0, 1, 2/3, 1/3; TO 0, 1, 1/2, 1/2
+        self.assertAlmostEqual(cl["1"]["byCat"]["PTS"]["expected"], 5 / 6)
+        self.assertAlmostEqual(cl["1"]["byCat"]["PTS"]["diff"], 1 / 6)
+        self.assertAlmostEqual(cl["1"]["byCat"]["TO"]["diff"], 1 / 3)
+        self.assertAlmostEqual(cl["2"]["byCat"]["PTS"]["diff"], -1 / 3)
+        self.assertAlmostEqual(cl["4"]["byCat"]["TO"]["expected"], 3 / 2)     # a level TO in week 2 counts half
+        self.assertEqual([cl[str(t)]["real"] for t in IDS], [2, 2, 3, 1])       # = the real category wins: 2+0, 0+2, 1+2, 1+0 (Score column)
+        self.assertEqual([round(cl[str(t)]["luck"], 6) for t in IDS], [0.5, -0.5, round(5 / 6, 6), round(-5 / 6, 6)])
+        self.assertAlmostEqual(sum(cl[str(t)]["luck"] for t in IDS), 0)
+        self.assertEqual([cl[str(t)]["rank"] for t in IDS], [2, 3, 1, 4])
+
     def test_real_record_expected_wins_and_luck(self):
         _, _, _, c = build()
         r = c["realRecord"]
@@ -189,7 +203,7 @@ class Shape(unittest.TestCase):
             yr.Fetcher = orig
         self.assertEqual(doc["schema"], "yahoo-roto-report/2")
         self.assertEqual(sorted(doc["views"]), ["season", "w1", "w2"])
-        self.assertEqual(sorted(doc["composites"]), ["boomBust", "categoryKings", "power", "realRecord", "seasonAllPlay", "seasonRoto", "weekly", "weeklyRoto", "weeks"])
+        self.assertEqual(sorted(doc["composites"]), ["boomBust", "catLuck", "categoryKings", "power", "realRecord", "seasonAllPlay", "seasonRoto", "weekly", "weeklyRoto", "weeks"])
         w1 = doc["views"]["w1"]
         self.assertEqual(w1["matchups"], [[1, 2]])
         self.assertEqual((w1["teams"]["1"]["score"], w1["teams"]["2"]["score"]), (1, 0))
