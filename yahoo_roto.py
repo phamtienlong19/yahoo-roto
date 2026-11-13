@@ -181,8 +181,10 @@ def _made_att(s):
 
 
 def parse_week(html, league):
-    """One matchup page (totals view) -> {"week": n, "weeks": [...], "teams": {teamId: {"name", "cols": {header: value}}}}.
-    A made/attempted column ("FGM/A*") is kept as a (made, att) pair; every other column as an exact number, None when Yahoo shows '-'."""
+    """One matchup page (totals view) -> {"week": n, "weeks": [...], "pair": [teamId, teamId], "teams": {teamId: {"name", "cols": {header: value}, "score"}}}.
+    A made/attempted column ("FGM/A*") is kept as a (made, att) pair; every other column as an exact number, None when Yahoo shows '-'.
+    "score" is the page's last, unnamed column: the category wins that team has this week. "pair" is the two teams that played each other (a matchup
+    page shows exactly the two sides of one matchup)."""
     root = parse_tree(html)
     week, weeks = None, []
     for o in root.find_all(lambda e: e.tag == "option"):
@@ -205,13 +207,15 @@ def parse_week(html, league):
                 continue
             tid = int(re.search(r"/%s/(\d+)" % re.escape(str(league)), e_href(link[0])).group(1))
             name = next((a.text() for a in link if a.text()), "")
-            cols = {}
-            for h, td in zip(heads[1:], tds[1:]):
+            cols, score = {}, None
+            for i, (h, td) in enumerate(zip(heads[1:], tds[1:]), 1):
                 if h:
                     cols[h] = _made_att(td.text()) if h.endswith("M/A*") else _num(td.text())
-            teams[tid] = {"name": name, "cols": cols}
+                elif i == len(heads) - 1:
+                    score = _num(td.text())
+            teams[tid] = {"name": name, "cols": cols, "score": score}
         if teams:
-            return {"week": week, "weeks": sorted(set(weeks)), "teams": teams}
+            return {"week": week, "weeks": sorted(set(weeks)), "pair": list(teams) if len(teams) == 2 else [], "teams": teams}
     raise RotoError("no matchup table found on the page (is this a head-to-head league with matchups?)")
 
 
@@ -347,7 +351,10 @@ def _cache_get(cache, league, week):
     if p and os.path.exists(p):
         with open(p, encoding="utf-8") as f:
             d = json.load(f)
-        return {"week": week, "teams": {int(t): {"name": r["name"], "cols": {h: _dec(v) for h, v in r["cols"].items()}} for t, r in d.items()}}
+        if d.get("v") != 2:                                             # an older file without Score / matchups: fetch again
+            return None
+        return {"week": week, "matchups": d["matchups"],
+                "teams": {int(t): {"name": r["name"], "score": _dec(r["score"]), "cols": {h: _dec(v) for h, v in r["cols"].items()}} for t, r in d["teams"].items()}}
     return None
 
 
@@ -356,12 +363,14 @@ def _cache_put(cache, league, wk):
     if p:
         os.makedirs(cache, exist_ok=True)
         with open(p, "w", encoding="utf-8") as f:
-            json.dump({str(t): {"name": r["name"], "cols": {h: _enc(v) for h, v in r["cols"].items()}} for t, r in wk["teams"].items()}, f)
+            json.dump({"v": 2, "matchups": wk.get("matchups", []),
+                       "teams": {str(t): {"name": r["name"], "score": _enc(r.get("score")), "cols": {h: _enc(v) for h, v in r["cols"].items()}}
+                                 for t, r in wk["teams"].items()}}, f)
 
 
 def collect_week(fx, league, week, team_ids, base):
     """All teams' totals for one week, walking only as many matchup pages as needed (each page covers two teams)."""
-    got = {}
+    got, pairs = {}, []
     for tid in team_ids:
         if tid in got:
             continue
@@ -369,7 +378,11 @@ def collect_week(fx, league, week, team_ids, base):
         if parsed["week"] not in (None, week):
             raise RotoError("asked for week %d but Yahoo showed week %s" % (week, parsed["week"]))
         got.update(parsed["teams"])
-    return {"week": week, "teams": got}
+        if parsed["pair"] and sorted(parsed["pair"]) not in pairs:
+            pairs.append(sorted(parsed["pair"]))
+        if not has_data({"teams": got}):                                # a week that has not started: the first page says so, skip the other pages
+            break
+    return {"week": week, "teams": got, "matchups": pairs}
 
 
 def has_data(wk):
@@ -411,19 +424,156 @@ def load(league, cache=None, delay=1.5, sport="nba", only_week=None, through=Non
     return st, teams, weeks_data, base
 
 
-def _view(weeks_data, teams, specs, label):
-    tot = totals(weeks_data, teams)
-    res, ranked = roto(tot, specs)
+def win_pct(rec):
+    """All-play Win% = (W + T/2) / (W + L + T), exact; None before any game."""
+    n = sum(rec)
+    return Fraction(2 * rec[0] + rec[2], 2 * n) if n else None
+
+
+def comp_rank(vals, high=True):
+    """Competition rank of {key: number}: the best is 1, level keys share a rank and the next rank is skipped (1, 2, 2, 4). None -> None."""
+    ok = {k: v for k, v in vals.items() if v is not None}
+    return {k: (None if v is None else 1 + sum(1 for o in ok.values() if (o > v if high else o < v))) for k, v in vals.items()}
+
+
+def _core(wk, specs):
+    tot = totals([wk], wk["teams"])
+    res, _ = roto(tot, specs)
     cells, rec = all_play(tot, specs)
-    return {"label": label, "weeks": [w["week"] for w in weeks_data],
-            "order": ranked,
-            "teams": {str(t): {"rank": res[t]["rank"], "total": res[t]["total"], "points": res[t]["points"], "allPlay": rec[t],
-                               "values": {sp["cat"]: _plain(cat_value(tot[t], sp)) for sp in specs}} for t in tot},
-            "matrix": {str(a): {str(b): c for b, c in row.items()} for a, row in cells.items()}}
+    return {"week": wk["week"], "tot": tot, "res": res, "cells": cells, "rec": rec}
+
+
+def _teams_block(ids, specs, tot, res, rec):
+    return {str(t): {"rank": res[t]["rank"], "total": res[t]["total"], "points": res[t]["points"], "allPlay": rec[t], "winPct": _plain(win_pct(rec[t])),
+                     "values": {sp["cat"]: _plain(cat_value(tot[t], sp)) for sp in specs}} for t in ids}
+
+
+def _orders(ids, res, rec):
+    """Roto and Raw views: roto total (ties keep team-id order, share the rank). All-Play: Win%, then roto total."""
+    roto_order = sorted(ids, key=lambda t: (-res[t]["total"], t))
+    ap_order = sorted(ids, key=lambda t: (-(win_pct(rec[t]) or 0), -res[t]["total"], t))
+    return roto_order, ap_order
+
+
+def _matrix(cells):
+    return {str(a): {str(b): c for b, c in row.items()} for a, row in cells.items()}
+
+
+def _week_view(core, wk, specs, ids):
+    res, rec = core["res"], core["rec"]
+    ro, ap = _orders(ids, res, rec)
+    teams = _teams_block(ids, specs, core["tot"], res, rec)
+    for t in ids:
+        teams[str(t)]["score"] = _plain(wk["teams"][t].get("score")) if t in wk["teams"] else None
+    return {"label": "Week %d" % wk["week"], "weeks": [wk["week"]], "order": ro, "allPlayOrder": ap, "teams": teams, "matrix": _matrix(core["cells"]),
+            "matchups": wk.get("matchups", [])}
+
+
+def _season_view(cores, weeks_data, specs, ids):
+    """Season roto ranks the summed category totals. The season All-Play record and matrix add up the weekly ones (no Score, no actual-matchup marker)."""
+    tot = totals(weeks_data, ids)
+    res, _ = roto(tot, specs)
+    rec = {t: [sum(c["rec"][t][i] for c in cores) for i in range(3)] for t in ids}
+    cells = {a: {b: [sum(c["cells"][a][b][i] for c in cores) for i in range(3)] for b in ids if b != a} for a in ids}
+    ro, ap = _orders(ids, res, rec)
+    ws = [w["week"] for w in weeks_data]
+    return {"label": "Season, weeks %s" % (("%d-%d" % (ws[0], ws[-1])) if len(ws) > 1 else ws[0]), "weeks": ws, "order": ro, "allPlayOrder": ap,
+            "teams": _teams_block(ids, specs, tot, res, rec), "matrix": _matrix(cells)}
+
+
+def _stdev(xs):
+    m = sum(xs) / len(xs)
+    return (sum((x - m) ** 2 for x in xs) / len(xs)) ** 0.5            # population standard deviation
+
+
+def composites(weeks_data, cores, specs, ids, season):
+    """The season boards, derived only from the weekly data already fetched. `season` is the season view."""
+    wk_by = {w["week"]: w for w in weeks_data}
+    weeks = [w["week"] for w in weeks_data]
+    weekly = {str(t): {} for t in ids}
+    for c in cores:
+        wk = wk_by[c["week"]]
+        opp = {}
+        for a, b in wk.get("matchups", []):
+            opp[a], opp[b] = b, a
+        for t in ids:
+            sc = wk["teams"].get(t, {}).get("score")
+            o = opp.get(t)
+            osc = wk["teams"].get(o, {}).get("score") if o is not None else None
+            result = None if sc is None or osc is None else "W" if sc > osc else "L" if sc < osc else "T"
+            weekly[str(t)][str(c["week"])] = {"points": c["res"][t]["points"], "total": c["res"][t]["total"], "rank": c["res"][t]["rank"], "allPlay": c["rec"][t],
+                                              "winPct": _plain(win_pct(c["rec"][t])), "score": _plain(sc), "opp": o, "result": result}
+    # 1 season roto (the headline board: the season view)
+    seasonRoto = {str(t): {"total": season["teams"][str(t)]["total"], "rank": season["teams"][str(t)]["rank"]} for t in ids}
+    # 2 weekly roto points: the sum of each week's roto total
+    sums = {t: sum(Fraction(weekly[str(t)][str(w)]["total"]) for w in weeks) for t in ids}
+    rk = comp_rank(sums)
+    weeklyRoto = {str(t): {"sum": _plain(sums[t]), "avg": _plain(sums[t] / len(weeks)), "rank": rk[t], "weekRanks": [weekly[str(t)][str(w)]["rank"] for w in weeks]} for t in ids}
+    # 3 season all-play: every week's record added up
+    ap = {t: season["teams"][str(t)]["allPlay"] for t in ids}
+    rk = comp_rank({t: win_pct(ap[t]) for t in ids})
+    seasonAllPlay = {str(t): {"record": ap[t], "winPct": season["teams"][str(t)]["winPct"], "rank": rk[t]} for t in ids}
+    # 4 real record vs expected wins; luck = real wins - expected wins (a tied matchup counts half a win; expected wins = the sum of weekly all-play Win%)
+    real = {}
+    for t in ids:
+        rec, exp = [0, 0, 0], Fraction(0)
+        for w in weeks:
+            wv = weekly[str(t)][str(w)]
+            if wv["result"] is None:
+                continue
+            rec["WLT".index(wv["result"])] += 1
+            exp += win_pct(wv["allPlay"]) or 0
+        games = sum(rec)
+        wins = Fraction(2 * rec[0] + rec[2], 2)
+        real[t] = {"record": rec, "games": games, "realWins": wins, "expectedWins": exp, "luck": wins - exp, "pct": win_pct(rec) if games else None}
+    rk = comp_rank({t: real[t]["pct"] for t in ids})
+    realRecord = {str(t): {"record": real[t]["record"], "winPct": _plain(real[t]["pct"]), "realWins": _plain(real[t]["realWins"]),
+                           "expectedWins": _plain(real[t]["expectedWins"]), "luck": _plain(real[t]["luck"]), "rank": rk[t]} for t in ids}
+    realRank = rk
+    # 5 category kings: the season leader and the best single week, per category
+    kings = {}
+    for sp in specs:
+        cat = sp["cat"]
+        def best(items):                                                      # items: [(teamId, week|None, value)] -> the best, with level holders listed
+            items = [i for i in items if i[2] is not None]
+            if not items:
+                return None
+            key = (lambda i: i[2]) if sp["lower"] else (lambda i: -i[2])
+            m = min(items, key=key)
+            level = [i for i in items if i[2] == m[2]]
+            return {"team": m[0], "week": m[1], "value": m[2], "also": [i[0] if i[1] is None else [i[0], i[1]] for i in level[1:]]}
+        sv = [(t, None, season["teams"][str(t)]["values"][cat]) for t in ids]
+        bw = [(t, w, _wval(cores, w, t, sp)) for w in weeks for t in ids]
+        kings[cat] = {"season": best(sv), "week": best(bw)}
+    # 6 boom / bust
+    bb = {}
+    for t in ids:
+        tots = [(weekly[str(t)][str(w)]["total"], w) for w in weeks]
+        sd = round(_stdev([x for x, _ in tots]), 9)
+        bb[t] = {"best": {"week": max(tots, key=lambda x: (x[0], -x[1]))[1], "total": max(tots)[0]},
+                 "worst": {"week": min(tots, key=lambda x: (x[0], x[1]))[1], "total": min(tots)[0]}, "stdev": sd}
+    rk = comp_rank({t: bb[t]["stdev"] for t in ids}, high=False)
+    boomBust = {str(t): dict(bb[t], rank=rk[t]) for t in ids}
+    # 7 power rank: the plain average of the ranks on boards 1-4 (real record is ranked by its win%)
+    comp = {t: {"seasonRoto": seasonRoto[str(t)]["rank"], "weeklyRoto": weeklyRoto[str(t)]["rank"], "seasonAllPlay": seasonAllPlay[str(t)]["rank"],
+                "realRecord": realRank[t]} for t in ids}
+    avg = {}
+    for t in ids:
+        got = [v for v in comp[t].values() if v is not None]
+        avg[t] = Fraction(sum(got), len(got)) if got else None
+    rk = comp_rank(avg, high=False)
+    power = {str(t): {"ranks": comp[t], "avg": _plain(avg[t]), "rank": rk[t]} for t in ids}
+    return {"weeks": weeks, "weekly": weekly, "seasonRoto": seasonRoto, "weeklyRoto": weeklyRoto, "seasonAllPlay": seasonAllPlay, "realRecord": realRecord,
+            "categoryKings": kings, "boomBust": boomBust, "power": power}
+
+
+def _wval(cores, week, t, sp):
+    c = next(c for c in cores if c["week"] == week)
+    return _plain(cat_value(c["tot"][t], sp))
 
 
 def report(league, cache=None, delay=1.5, sport="nba", now=None):
-    """The whole report: one view for the season and one per week that has stats (what the page and the PNGs are drawn from)."""
+    """The whole report: one view for the season and one per week that has stats, plus the season composites (what the page and the PNGs are drawn from)."""
     import datetime
     st, teams, weeks_data, _base = load(league, cache, delay, sport)
     headers = list(next(iter(weeks_data[0]["teams"].values()))["cols"])
@@ -432,13 +582,16 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None):
     if not specs:
         raise RotoError("none of the league's categories (%s) can be computed from the matchup pages" % ", ".join(cats))
     names = {t: teams.get(t) or next((wk["teams"][t]["name"] for wk in weeks_data if t in wk["teams"]), str(t)) for t in teams}
-    views = {"season": _view(weeks_data, teams, specs, "Season, weeks %s" % (("%d-%d" % (weeks_data[0]["week"], weeks_data[-1]["week"])) if len(weeks_data) > 1 else weeks_data[0]["week"]))}
-    for wk in weeks_data:
-        views["w%d" % wk["week"]] = _view([wk], teams, specs, "Week %d" % wk["week"])
+    ids = sorted(teams)
+    cores = [_core(wk, specs) for wk in weeks_data]
+    views = {"season": _season_view(cores, weeks_data, specs, ids)}
+    for wk, c in zip(weeks_data, cores):
+        views["w%d" % wk["week"]] = _week_view(c, wk, specs, ids)
     when = now or datetime.datetime.now(datetime.timezone.utc)
-    return {"schema": "yahoo-roto-report/1", "league": str(league), "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    return {"schema": "yahoo-roto-report/2", "league": str(league), "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "inProgressWeek": weeks_data[-1]["week"], "categories": [{"cat": sp["cat"], "lower": sp["lower"], "pct": sp["kind"] == "pct"} for sp in specs],
-            "skipped": skipped, "teams": {str(t): names[t] for t in names}, "weeks": [wk["week"] for wk in weeks_data], "views": views}
+            "skipped": skipped, "teams": {str(t): names[t] for t in names}, "weeks": [wk["week"] for wk in weeks_data], "views": views,
+            "composites": composites(weeks_data, cores, specs, ids, views["season"])}
 
 
 def run(league, week=None, through=None, cache=None, delay=1.5, sport="nba", out=print):
@@ -485,7 +638,10 @@ def _fmt(cat, v):
 
 
 # ------------------------------------------------------------------ files: self-contained HTML and the three images
-IMAGES = (("roto", 720), ("raw", 720), ("allplay", 1040))          # (view, css width); drawn at device scale 2.5
+IMAGES = (("roto", "roto", 1680), ("stats", "stats", 1680), ("allplay", "allplay", 2600))        # (page view, file name, css width); drawn at device scale 1.5
+SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
+SEASON_WIDTH = 1680
+SCALE = 1.5
 
 
 def write_html(doc, out_dir):
@@ -513,24 +669,30 @@ def find_chrome():
     return None
 
 
-def write_images(html_path, out_dir, week=None, chrome=None):
-    """Three PNGs (roto, raw stats, all-play) by screenshotting the page in headless Chrome at device scale 2.5. The page height is measured first so
-    each image is exactly as tall as its table. Needs Google Chrome / Chromium; fonts come from Google Fonts (system fonts are used if offline)."""
+def write_images(html_path, out_dir, week=None, season=False, chrome=None):
+    """PNGs of the page in static mode (no week strip or buttons), drawn by headless Chrome at device scale 1.5: roto.png, stats.png and allplay.png of one
+    week (default: the current week; `week` picks another), or season-<board>.png for every season board with `season`. The page height is measured first
+    (the bottom of the .sheet, after the fonts have loaded) so each image is exactly as tall as its sheet. Needs Google Chrome / Chromium."""
+    import pathlib
     import subprocess
     chrome = chrome or find_chrome()
     if not chrome:
         raise RotoError("Chrome/Chromium not found: set $CHROME to its path to draw the images (the HTML file works without it)")
     base = ["--headless", "--disable-gpu", "--hide-scrollbars", "--no-sandbox", "--virtual-time-budget=20000"]
+    jobs = [("season-%s.png" % b, "season=1&board=%s" % b, SEASON_WIDTH) for b in SEASON_BOARDS] if season else \
+           [("%s.png" % f, "view=%s%s" % (v, "&week=%d" % week if week else ""), w) for v, f, w in IMAGES]
     paths = []
-    for view, width in IMAGES:
-        url = "file://%s?static=1&view=%s%s" % (html_path, view, "&week=%d" % week if week else "")
+    for fname, query, width in jobs:
+        url = "%s?static=1&%s" % (pathlib.Path(html_path).resolve().as_uri(), query)
         dom = subprocess.run([chrome] + base + ["--window-size=%d,1000" % width, "--dump-dom", url], capture_output=True, text=True, timeout=120).stdout
         m = re.search(r'name="report-height"[^>]*content="(\d+)"|content="(\d+)"[^>]*name="report-height"', dom)
         if not m:
-            raise RotoError("could not measure the %s page (Chrome printed no document)" % view)
-        height = int(m.group(1) or m.group(2)) + 8
-        path = os.path.join(out_dir, "%s.png" % view)
-        subprocess.run([chrome] + base + ["--force-device-scale-factor=2.5", "--window-size=%d,%d" % (width, height), "--screenshot=" + path, url],
+            raise RotoError("could not measure %s (Chrome printed no document)" % fname)
+        if 'data-fonts="1"' not in dom:
+            print("note: fonts were not confirmed loaded for %s (offline?); system fonts may be used" % fname, file=sys.stderr)
+        height = int(m.group(1) or m.group(2))
+        path = os.path.join(out_dir, fname)
+        subprocess.run([chrome] + base + ["--force-device-scale-factor=%s" % SCALE, "--window-size=%d,%d" % (width, height), "--screenshot=" + path, url],
                        capture_output=True, timeout=120)
         if not os.path.exists(path):
             raise RotoError("Chrome did not write %s" % path)
@@ -541,14 +703,15 @@ def write_images(html_path, out_dir, week=None, chrome=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("league", help="the Yahoo league id (the number in the league's URL)")
-    ap.add_argument("--week", type=int, help="one week only")
+    ap.add_argument("--week", type=int, help="one week only (with --report --png: the week to draw, default the current week)")
     ap.add_argument("--through", type=int, help="season roto through this week")
     ap.add_argument("--sport", default="nba", choices=sorted(SPORTS), help="default nba (categories and pages are verified for NBA only)")
     ap.add_argument("--cache", help="directory to keep fetched pages in")
     ap.add_argument("--delay", type=float, default=1.5, help="seconds between requests (default 1.5)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--report", metavar="DIR", help="write DIR/report.json and a self-contained DIR/index.html (all weeks, all three views)")
-    ap.add_argument("--png", action="store_true", help="with --report: also draw DIR/roto.png, raw.png, allplay.png (needs Chrome)")
+    ap.add_argument("--png", action="store_true", help="with --report: also draw DIR/roto.png, stats.png, allplay.png of the current week (needs Chrome); --week N for another week")
+    ap.add_argument("--season", action="store_true", help="with --png: draw the season boards (DIR/season-<board>.png) instead")
     a = ap.parse_args(argv)
     try:
         if a.report:
@@ -556,7 +719,7 @@ def main(argv=None):
             path = write_html(doc, a.report)
             print("wrote %s and report.json (weeks %s, week %d in progress)" % (path, ", ".join(map(str, doc["weeks"])), doc["inProgressWeek"]))
             if a.png:
-                for p in write_images(os.path.abspath(path), a.report, a.week):
+                for p in write_images(os.path.abspath(path), a.report, a.week, a.season):
                     print("wrote", p)
             return 0
         doc = run(a.league, a.week, a.through, a.cache, a.delay, a.sport)

@@ -1,4 +1,4 @@
 {
-  "note": "Yahoo league ids to keep fresh. Each must be publicly viewable and head-to-head. About 8 Yahoo requests per league per refresh, 1.5 s apart.",
+  "note": "Yahoo league ids to keep fresh. Each must be publicly viewable and head-to-head. About 12 Yahoo requests per league per refresh (16 teams), 1.5 s apart.",
   "leagues": [85092]
 }
