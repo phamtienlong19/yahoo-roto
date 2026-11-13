@@ -149,6 +149,15 @@ class Season(unittest.TestCase):
         self.assertEqual([r[str(t)]["rank"] for t in IDS], [2, 2, 1, 4])
         self.assertAlmostEqual(sum(r[str(t)]["luck"] for t in IDS), 0)  # luck is zero-sum here
 
+    def test_real_rank_uses_the_category_record_like_yahoos_standings(self):
+        _, _, _, c = build()
+        r = c["realRecord"]
+        # category W-L-T against the actual opponents: W1 t1 2-0, t2 0-2, t3 1-1, t4 1-1; W2 t1 0-2, t3 2-0, t2 2-0, t4 0-2
+        self.assertEqual([r[str(t)]["catRecord"] for t in IDS], [[2, 2, 0], [2, 2, 0], [3, 1, 0], [1, 3, 0]])
+        self.assertEqual([r[str(t)]["catWinPct"] for t in IDS], [0.5, 0.5, 0.75, 0.25])
+        self.assertEqual([r[str(t)]["rank"] for t in IDS], [2, 2, 1, 4])
+        self.assertEqual([r[str(t)]["record"] for t in IDS], [[1, 1, 0], [1, 1, 0], [1, 0, 1], [0, 1, 1]])   # the matchup record stays as a column
+
     def test_category_kings_season_and_best_week(self):
         _, _, _, c = build()
         k = c["categoryKings"]
