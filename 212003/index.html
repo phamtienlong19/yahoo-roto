@@ -109,6 +109,9 @@ table{border-collapse:separate;border-spacing:0}
 .msg{padding:48px 16px;text-align:center;color:#51657a;font:600 15px/1.5 Inter,"Noto Sans","Segoe UI",Arial,sans-serif}.msg b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
 .err{color:#a1233a}
 
+.fh{position:fixed;top:0;z-index:30;overflow:hidden;background:#fff;display:none;box-shadow:0 8px 14px -10px #1b365040;border-bottom:1px solid #c9d7e3}
+.fh table{border-collapse:separate;border-spacing:0}
+body.static .fh{display:none!important}
 body.static{padding:0;background:#fff}
 body.static .weekbar,body.static .status,body.static nav{display:none}
 body.static .wrap{width:100%}
@@ -291,7 +294,25 @@ function render(){var main=$("main");main.textContent="";if(!DOC)return;
  document.title=lg()+" · roto";
  main.appendChild(S.season?seasonSheet():weekSheet());
  drawStrip();drawStatus();drawNav();pushUrl();
- try{document.body.setAttribute("data-ready","1");}catch(e){}measure();}
+ try{document.body.setAttribute("data-ready","1");}catch(e){}measure();floatHead();}
+/* Sticky column headers. A CSS sticky <thead> cannot work here: the tables sit in a horizontal scroll box, which also becomes their vertical scroll
+   container. So a copy of the header is pinned to the top of the window (outside .sheet, whose container-type would capture position:fixed) while the
+   real header is scrolled out of view; it follows the table's horizontal scroll. Not used for the PNG export (static mode). */
+var FH=null,FHT=null,FHS=null;
+function updFH(){if(!FH||!FHT||!FHS)return;var r=FHT.getBoundingClientRect(),hh=FH.offsetHeight||0,b=FHS.getBoundingClientRect();
+ var on=r.top<-1&&r.bottom>hh+48&&b.width>0;FH.style.display=on?"block":"none";if(!on)return;
+ FH.style.left=b.left+"px";FH.style.width=FHS.clientWidth+"px";FH.scrollLeft=FHS.scrollLeft;}
+function floatHead(){if(FH){FH.remove();}FH=FHT=FHS=null;if(STATIC)return;
+ var sc=document.querySelector(".tscroll"),t=sc&&sc.querySelector("table"),th=t&&t.tHead;if(!th||!th.rows.length)return;
+ var last=th.rows[th.rows.length-1],c=t.cloneNode(false),cg=document.createElement("colgroup");
+ Array.prototype.forEach.call(last.cells,function(x){var col=document.createElement("col");col.style.width=x.getBoundingClientRect().width+"px";cg.appendChild(col);});
+ c.appendChild(cg);var hc=th.cloneNode(true);c.appendChild(hc);
+ Array.prototype.forEach.call(hc.querySelectorAll("th"),function(x){x.style.minWidth="0";x.style.maxWidth="none";});
+ c.style.fontSize=getComputedStyle(t).fontSize;c.style.width=t.getBoundingClientRect().width+"px";c.style.tableLayout="fixed";
+ FH=h("div",{class:"fh","aria-hidden":"true"},[c]);document.body.appendChild(FH);FHT=t;FHS=sc;
+ sc.addEventListener("scroll",updFH,{passive:true});updFH();}
+window.addEventListener("scroll",updFH,{passive:true});
+(function(){var tm;window.addEventListener("resize",function(){clearTimeout(tm);tm=setTimeout(floatHead,150);});})();
 function update(){render();}
 function fail(msg){$("main").textContent="";$("main").appendChild(h("section",{class:"sheet"},[h("div",{class:"in"},[h("div",{class:"msg err"},[h("b",{text:"Could not load the report"}),msg])])]));}
 function accept(d){if(!d||!d.views||!d.views.season||!d.composites)throw new Error("not a roto report file (schema 2)");DOC=d;render();}
