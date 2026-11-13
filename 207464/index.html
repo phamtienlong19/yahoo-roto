@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Roto report</title>
+<!--meta--><title>NBA Talk VN - Serie A · Roto standings</title>
+<meta name="description" content="Roto points, raw category totals, an all-play matrix, luck and power rank for NBA Talk VN - Serie A.">
+<meta property="og:type" content="website"><meta property="og:title" content="NBA Talk VN - Serie A"><meta property="og:description" content="Roto points, raw category totals, an all-play matrix, luck and power rank for NBA Talk VN - Serie A."><meta name="twitter:card" content="summary"><!--/meta-->
+<script>(function(){try{if(location.search.indexOf("static=1")>=0)return;var t=localStorage.getItem("roto.theme")||"auto";if(t==="dark"||(t==="auto"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231667ac'/%3E%3Cpath d='M8 22V14M16 22V8M24 22V17' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Geist+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -134,6 +137,50 @@ tr.me-row>th.team{background:#eaf2fa!important}
  nav::-webkit-scrollbar{display:none}
  nav button{flex:0 0 auto;white-space:nowrap}
 }
+/* ---- dark theme: only html[data-theme=dark] (set by the head script / toggle; never in static mode, so PNGs stay light) ---- */
+html[data-theme=dark]{color-scheme:dark;--ink:#e7edf3;--stripe:#1b232c;--green-strong:#2f7d52;--green-soft:#1f4535;--red-strong:#8c3b4b;--red-soft:#472631;
+ --dark-green:#2f7d52;--green:#2a6a47;--light-green:#1f4535;--white:#171e26;--light-red:#472631;--red:#6e3040;--dark-red:#8c3b4b;--actual:#9a8cf0}
+html[data-theme=dark] body{background:#0f141a}
+html[data-theme=dark] .sheet{background:#171e26;box-shadow:0 1px 2px #0006,0 8px 28px #0004}
+html[data-theme=dark] h1{color:#6db3ec}
+html[data-theme=dark] .view-subtitle{color:#aab8c7}
+html[data-theme=dark] .status{color:#9fb0c1}html[data-theme=dark] .status .stale,html[data-theme=dark] .err{color:#ff8fa3}
+html[data-theme=dark] .weekbar .arrow,html[data-theme=dark] .strip button,html[data-theme=dark] nav button{background:#171e26;border-color:#2b3744;color:#b9c6d3}
+html[data-theme=dark] .strip button[aria-selected=true],html[data-theme=dark] nav button.active{background:var(--blue);border-color:var(--blue);color:#fff}
+html[data-theme=dark] .st thead th{color:#93a4b6;border-bottom-color:#33414f}
+html[data-theme=dark] .st tbody td,html[data-theme=dark] .st tbody th{border-bottom-color:#232d38}
+html[data-theme=dark] .st tbody tr:nth-child(odd){background:#171e26}html[data-theme=dark] .st tbody tr:nth-child(even){background:#1b232c}
+html[data-theme=dark] .st th.team{box-shadow:1px 0 0 #232d38}
+html[data-theme=dark] .st thead th.team,html[data-theme=dark] .st tbody tr:nth-child(odd) th.team{background:#171e26}
+html[data-theme=dark] .st tbody tr:nth-child(even) th.team{background:#1b232c}
+html[data-theme=dark] .st th.team.me{box-shadow:inset 4px 0 0 #4aa3e8,1px 0 0 #232d38}
+html[data-theme=dark] .st td.green-strong,html[data-theme=dark] .chips span.green-strong{color:#d8f5e3}html[data-theme=dark] .st td.green-soft,html[data-theme=dark] .chips span.green-soft{color:#bfe8cf}
+html[data-theme=dark] .st td.red-strong,html[data-theme=dark] .chips span.red-strong{color:#ffdbe2}html[data-theme=dark] .st td.red-soft,html[data-theme=dark] .chips span.red-soft{color:#f3c8d0}
+html[data-theme=dark] .st thead tr.grp th{color:#7f90a2}html[data-theme=dark] .st thead tr.grp th span{border-bottom-color:#2d3945}
+html[data-theme=dark] .st th.sep,html[data-theme=dark] .st td.sep{border-left-color:#3a4b5d}
+html[data-theme=dark] .st th.tot,html[data-theme=dark] .st td.tot{background-image:linear-gradient(#4aa3e81a,#4aa3e81a)}
+html[data-theme=dark] .st td.pos{color:#5fd08d}html[data-theme=dark] .st td.neg{color:#ff8fa3}
+html[data-theme=dark] .st td.king .small{color:#7f90a2}
+html[data-theme=dark] .st td.kv{color:#6db3ec;background-image:linear-gradient(#4aa3e81a,#4aa3e81a)}html[data-theme=dark] .st td.kw{color:#8ea0b3}
+html[data-theme=dark] .chips span{background:#171e26;border-color:#2b3744}
+html[data-theme=dark] .note,html[data-theme=dark] .stamp,html[data-theme=dark] .hint{color:#7f90a2}
+html[data-theme=dark] .legend{color:#9fb0c1}html[data-theme=dark] .legend .sw{background:#171e26;border-color:#2b3744}html[data-theme=dark] .legend .chip{border-color:#33414f}
+html[data-theme=dark] .mx,html[data-theme=dark] .mx th,html[data-theme=dark] .mx td{border-color:#2b3744}
+html[data-theme=dark] .mx thead th{background:#171e26;color:#9fb4c9}
+html[data-theme=dark] .mx tbody th{background:#171e26}html[data-theme=dark] .mx tbody tr:nth-child(even) th{background:#1b232c}
+html[data-theme=dark] .mx .diag{background:#141a21;color:#51606f}
+html[data-theme=dark] .mx .dark-green{color:#d8f5e3}html[data-theme=dark] .mx .green{color:#d0f0dc}html[data-theme=dark] .mx .light-green{color:#bfe8cf}
+html[data-theme=dark] .mx .white{background:#171e26;color:#aab8c7}html[data-theme=dark] .mx .light-red{color:#f3c8d0}html[data-theme=dark] .mx .red{color:#ffdbe2}html[data-theme=dark] .mx .dark-red{color:#ffe0e6}
+html[data-theme=dark] .mx .record,html[data-theme=dark] .mx .pct{background:#1b232c;color:#dbe5ee}
+html[data-theme=dark] .chip.white{background:#171e26}
+html[data-theme=dark] .msg{color:#9fb0c1}
+html[data-theme=dark] .fh{background:#171e26;border-bottom-color:#33414f;box-shadow:0 8px 14px -10px #000a}
+html[data-theme=dark] tr.me-row>td{box-shadow:inset 0 2px 0 #4aa3e84d,inset 0 -2px 0 #4aa3e84d}
+html[data-theme=dark] tr.me-row>th.team,html[data-theme=dark] .mx tr.me-row>th{background:#1d3550!important}
+html[data-theme=dark] .how{color:#9fb0c1}html[data-theme=dark] .how summary{background:#171e26;border-color:#2b3744;color:#b9c6d3}
+html[data-theme=dark] .how[open] summary{background:#1d2a37}html[data-theme=dark] .how p{background:#1b232c}
+.weekbar #theme{font-size:18px}
+body.static #theme{display:none}
 body.static .fh{display:none!important}
 body.static{padding:0;background:#fff}
 body.static .weekbar,body.static .status,body.static nav{display:none}
@@ -144,7 +191,7 @@ body.static .sheet{box-shadow:none;width:100%}
 </head>
 <body>
 <div class="wrap">
- <div class="weekbar" id="weekbar"><button class="arrow" id="prev" aria-label="Previous week" title="Previous (left arrow)">&#8249;</button><div class="strip" id="strip" role="tablist" aria-label="Week"></div><button class="arrow" id="next" aria-label="Next week" title="Next (right arrow)">&#8250;</button></div>
+ <div class="weekbar" id="weekbar"><button class="arrow" id="prev" aria-label="Previous week" title="Previous (left arrow)">&#8249;</button><div class="strip" id="strip" role="tablist" aria-label="Week"></div><button class="arrow" id="next" aria-label="Next week" title="Next (right arrow)">&#8250;</button><button class="arrow" id="theme" aria-label="Colour theme" title="Theme: auto"></button></div>
  <div class="status" id="status"></div>
  <nav id="nav"></nav>
  <main id="main"><section class="sheet"><div class="in"><div class="msg">Loading&hellip;</div></div></section></main>
@@ -376,6 +423,15 @@ function floatHead(){if(FH){FH.remove();}FH=FHT=FHS=null;if(STATIC)return;
  sc.addEventListener("scroll",updFH,{passive:true});updFH();}
 window.addEventListener("scroll",updFH,{passive:true});
 (function(){var tm;window.addEventListener("resize",function(){clearTimeout(tm);tm=setTimeout(floatHead,150);});})();
+/* Theme: auto (follow the phone/OS) -> light -> dark, remembered on this device. Static mode (PNG export) is always light. */
+function themePref(){try{return localStorage.getItem("roto.theme")||"auto";}catch(e){return "auto";}}
+function applyTheme(){if(STATIC)return;var t=themePref(),d=t==="dark"||(t==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches),b=$("theme");
+ if(d)document.documentElement.setAttribute("data-theme","dark");else document.documentElement.removeAttribute("data-theme");
+ if(b){b.textContent={auto:"\u25D0",light:"\u2600\uFE0E",dark:"\u263E\uFE0E"}[t];b.title="Theme: "+t+" (tap to change)";}}
+function cycleTheme(){var n={auto:"light",light:"dark",dark:"auto"}[themePref()];try{localStorage.setItem("roto.theme",n);}catch(e){}applyTheme();}
+$("theme").onclick=cycleTheme;applyTheme();
+if(window.matchMedia)try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",applyTheme);}catch(e){}
+window.addEventListener("beforeprint",function(){document.documentElement.removeAttribute("data-theme");});window.addEventListener("afterprint",applyTheme);
 function update(){render();}
 var RT=null;
 function fail(msg){$("main").textContent="";clearTimeout(RT);
