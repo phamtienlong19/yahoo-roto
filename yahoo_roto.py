@@ -636,7 +636,10 @@ def _fmt(cat, v):
 
 
 # ------------------------------------------------------------------ files: self-contained HTML and the three images
-IMAGES = (("roto", 720), ("raw", 720), ("allplay", 1040))          # (view, css width); drawn at device scale 2.5
+IMAGES = (("roto", "roto", 1680), ("stats", "stats", 1680), ("allplay", "allplay", 2600))        # (page view, file name, css width); drawn at device scale 1.5
+SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
+SEASON_WIDTH = 1680
+SCALE = 1.5
 
 
 def write_html(doc, out_dir):
@@ -664,24 +667,30 @@ def find_chrome():
     return None
 
 
-def write_images(html_path, out_dir, week=None, chrome=None):
-    """Three PNGs (roto, raw stats, all-play) by screenshotting the page in headless Chrome at device scale 2.5. The page height is measured first so
-    each image is exactly as tall as its table. Needs Google Chrome / Chromium; fonts come from Google Fonts (system fonts are used if offline)."""
+def write_images(html_path, out_dir, week=None, season=False, chrome=None):
+    """PNGs of the page in static mode (no week strip or buttons), drawn by headless Chrome at device scale 1.5: roto.png, stats.png and allplay.png of one
+    week (default: the current week; `week` picks another), or season-<board>.png for every season board with `season`. The page height is measured first
+    (the bottom of the .sheet, after the fonts have loaded) so each image is exactly as tall as its sheet. Needs Google Chrome / Chromium."""
+    import pathlib
     import subprocess
     chrome = chrome or find_chrome()
     if not chrome:
         raise RotoError("Chrome/Chromium not found: set $CHROME to its path to draw the images (the HTML file works without it)")
     base = ["--headless", "--disable-gpu", "--hide-scrollbars", "--no-sandbox", "--virtual-time-budget=20000"]
+    jobs = [("season-%s.png" % b, "season=1&board=%s" % b, SEASON_WIDTH) for b in SEASON_BOARDS] if season else \
+           [("%s.png" % f, "view=%s%s" % (v, "&week=%d" % week if week else ""), w) for v, f, w in IMAGES]
     paths = []
-    for view, width in IMAGES:
-        url = "file://%s?static=1&view=%s%s" % (html_path, view, "&week=%d" % week if week else "")
+    for fname, query, width in jobs:
+        url = "%s?static=1&%s" % (pathlib.Path(html_path).resolve().as_uri(), query)
         dom = subprocess.run([chrome] + base + ["--window-size=%d,1000" % width, "--dump-dom", url], capture_output=True, text=True, timeout=120).stdout
         m = re.search(r'name="report-height"[^>]*content="(\d+)"|content="(\d+)"[^>]*name="report-height"', dom)
         if not m:
-            raise RotoError("could not measure the %s page (Chrome printed no document)" % view)
-        height = int(m.group(1) or m.group(2)) + 8
-        path = os.path.join(out_dir, "%s.png" % view)
-        subprocess.run([chrome] + base + ["--force-device-scale-factor=2.5", "--window-size=%d,%d" % (width, height), "--screenshot=" + path, url],
+            raise RotoError("could not measure %s (Chrome printed no document)" % fname)
+        if 'data-fonts="1"' not in dom:
+            print("note: fonts were not confirmed loaded for %s (offline?); system fonts may be used" % fname, file=sys.stderr)
+        height = int(m.group(1) or m.group(2))
+        path = os.path.join(out_dir, fname)
+        subprocess.run([chrome] + base + ["--force-device-scale-factor=%s" % SCALE, "--window-size=%d,%d" % (width, height), "--screenshot=" + path, url],
                        capture_output=True, timeout=120)
         if not os.path.exists(path):
             raise RotoError("Chrome did not write %s" % path)
@@ -692,14 +701,15 @@ def write_images(html_path, out_dir, week=None, chrome=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("league", help="the Yahoo league id (the number in the league's URL)")
-    ap.add_argument("--week", type=int, help="one week only")
+    ap.add_argument("--week", type=int, help="one week only (with --report --png: the week to draw, default the current week)")
     ap.add_argument("--through", type=int, help="season roto through this week")
     ap.add_argument("--sport", default="nba", choices=sorted(SPORTS), help="default nba (categories and pages are verified for NBA only)")
     ap.add_argument("--cache", help="directory to keep fetched pages in")
     ap.add_argument("--delay", type=float, default=1.5, help="seconds between requests (default 1.5)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--report", metavar="DIR", help="write DIR/report.json and a self-contained DIR/index.html (all weeks, all three views)")
-    ap.add_argument("--png", action="store_true", help="with --report: also draw DIR/roto.png, raw.png, allplay.png (needs Chrome)")
+    ap.add_argument("--png", action="store_true", help="with --report: also draw DIR/roto.png, stats.png, allplay.png of the current week (needs Chrome); --week N for another week")
+    ap.add_argument("--season", action="store_true", help="with --png: draw the season boards (DIR/season-<board>.png) instead")
     a = ap.parse_args(argv)
     try:
         if a.report:
@@ -707,7 +717,7 @@ def main(argv=None):
             path = write_html(doc, a.report)
             print("wrote %s and report.json (weeks %s, week %d in progress)" % (path, ", ".join(map(str, doc["weeks"])), doc["inProgressWeek"]))
             if a.png:
-                for p in write_images(os.path.abspath(path), a.report, a.week):
+                for p in write_images(os.path.abspath(path), a.report, a.week, a.season):
                     print("wrote", p)
             return 0
         doc = run(a.league, a.week, a.through, a.cache, a.delay, a.sport)

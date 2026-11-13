@@ -8,7 +8,9 @@ standard library only, read-only, no sign-in.
 python3 yahoo_roto.py 85092                          # text table: season roto (every week with stats)
 python3 yahoo_roto.py 85092 --week 3                 # one week; --through 3 = weeks 1-3; --json for machine-readable
 python3 yahoo_roto.py 85092 --report out/            # out/index.html (self-contained, opens anywhere) + out/report.json
-python3 yahoo_roto.py 85092 --report out/ --png      # + out/roto.png, raw.png, allplay.png (needs Google Chrome / Chromium)
+python3 yahoo_roto.py 85092 --report out/ --png      # + out/roto.png, stats.png, allplay.png of the current week (needs Google Chrome / Chromium)
+python3 yahoo_roto.py 85092 --report out/ --png --week 3   # the same three images for week 3
+python3 yahoo_roto.py 85092 --report out/ --png --season   # out/season-<board>.png for the seven season boards
 python3 yahoo_roto.py 85092 --report out/ --cache .cache   # reruns only fetch the newest week
 ```
 `index.html` (the page template; the report writes a self-contained copy with the JSON inlined) opens on the latest week with stats ("Week N (in progress)").
@@ -16,6 +18,9 @@ A week strip (`W1 ... WN`, `<` `>` buttons, left/right keys) switches weeks; the
 Matrix, Weekly Roto Points, Season All-Play, Real Record & Luck, Category Kings, Boom / Bust, Power Rank). Roto Points / Raw Stats / All-Play Matrix keep the
 chosen week. The choice lives in the URL: `?week=3&view=allplay` (views `roto`, `stats`, `allplay`) or `?season=1&board=power`. It is built for phones too:
 the team column sticks and wide tables scroll inside their own box, never the page. The look follows `reference/serie_a_week3.html`.
+
+The PNGs are drawn from the same page in static mode at device scale 1.5 (1680 px wide for roto, stats and the season boards, 2600 px for the all-play matrix), cropped to
+the sheet. Set `$CHROME` if Chrome is not found. Fonts (Inter) come from Google Fonts; offline, system fonts are used.
 
 ## A public link that refreshes itself on game days
 This repo is the setup: GitHub Pages serves `index.html` from `main`, and the `Roto live` workflow (`.github/workflows/roto-live.yml`) keeps
