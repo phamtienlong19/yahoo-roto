@@ -29,7 +29,7 @@ button{font-family:inherit}
 .strip button.season{margin-left:10px}
 .strip button[aria-selected=true]{background:var(--blue);border-color:var(--blue);color:#fff}
 .status{font:600 13px/1.4 Inter,"Noto Sans","Segoe UI",Arial,sans-serif;color:#51657a;text-align:center;margin:0 auto 10px}
-.status b{color:var(--ink)}.status .stale{color:#a1233a;font-weight:700}
+.status a{color:var(--blue);text-decoration:none;font-weight:700}.status a:hover{text-decoration:underline}.status b{color:var(--ink)}.status .stale{color:#a1233a;font-weight:700}
 nav{display:flex;gap:10px;justify-content:center;align-items:center;margin-bottom:16px;flex-wrap:wrap}
 nav button{font:600 clamp(13px,3.4vw,18px) Inter,"Noto Sans","Segoe UI",Arial,sans-serif;background:#fff;color:#425464;border:1px solid #d3dce4;border-radius:999px;padding:clamp(8px,1.6vw,12px) clamp(14px,3vw,24px);cursor:pointer;transition:background .15s,color .15s}
 nav button.active{background:var(--blue);border-color:var(--blue);color:#fff}
@@ -142,12 +142,14 @@ return {places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,
 <script>
 (function(){
 "use strict";
-var P=RotoPure,Q=new URLSearchParams(location.search),STATIC=Q.get("static")==="1",LEAGUE=Q.get("league")||"",
- SRC=Q.get("data")||(LEAGUE?"https://raw.githubusercontent.com/"+(Q.get("repo")||"")+"/data/"+LEAGUE+"/report.json":"report.json"),
+var P=RotoPure,Q=new URLSearchParams(location.search),STATIC=Q.get("static")==="1",LEAGUE=Q.get("league")||"",LEAGUES=[],
+ PM=location.hostname.match(/^([^.]+)\.github\.io$/),PS=location.pathname.split("/")[1],
+ REPO=Q.get("repo")||(PM&&PS?PM[1]+"/"+PS:""),                /* on <owner>.github.io/<repo>/ the repo is known: no ?repo= needed */
+ SRC=Q.get("data")||"",
  REFRESH=120000,STALE=15*60000,ME=Q.get("me")||"",DOC=null,
  BOARDS=[["roto","Season Roto"],["totals","Raw Totals"],["matrix","All-Play Matrix"],["weekly","Weekly Roto Points"],["allplay","Season All-Play"],["real","Real Record & Luck"],["catluck","Category Luck"],["kings","Category Kings"],["boom","Boom / Bust"],["power","Power Rank"]],
  VIEWS=[["roto","Roto Points"],["stats","Raw Stats"],["allplay","All-Play Matrix"]],
- S={week:Q.get("week")?parseInt(Q.get("week"),10):null,season:Q.get("season")==="1",view:Q.get("view")||"roto",board:Q.get("board")||null,explicit:!!(Q.get("week")||Q.get("season")==="1")};
+ S={week:Q.get("week")?parseInt(Q.get("week"),10):null,season:Q.get("season")==="1"||!!Q.get("board"),view:Q.get("view")||"roto",board:Q.get("board")||null,explicit:!!(Q.get("week")||Q.get("season")==="1"||Q.get("board"))};   /* ?board=catluck alone opens the Season tab on that board */
 if(S.view==="raw")S.view="stats";
 if(STATIC)document.body.classList.add("static");
 
@@ -182,6 +184,8 @@ function drawStatus(){var el=$("status");el.textContent="";var w=weekNo(),a=asOf
  var lead=S.season?"Season, "+span(DOC.views.season).toLowerCase()+(DOC.weeks.length?" · week "+cur()+" in progress":""):"Week "+w+(live?" (in progress)":"");
  el.appendChild(h("b",{text:lead}));
  el.appendChild(document.createTextNode(live?" · As of "+a.text:" · Final"));
+ if(LEAGUES.length>1&&!STATIC){el.appendChild(document.createTextNode(" · League "));LEAGUES.forEach(function(id,i){if(i)el.appendChild(document.createTextNode(" / "));
+  el.appendChild(id===LEAGUE?h("b",{text:id}):h("a",{href:"?league="+id,text:id}));});}
  if(live&&a.stale&&!STATIC)el.appendChild(h("span",{class:"stale",text:" · ⚠ data is "+a.min+" min old, the feed may have stalled"}));}
 function drawNav(){var nav=$("nav");nav.textContent="";nav.className=S.season?"sub":"";
  var items=S.season?BOARDS.filter(function(x){return x[0]!=="catluck"||(DOC.composites&&DOC.composites.catLuck);}):VIEWS,on=S.season?boardOf():viewOf();
@@ -284,8 +288,13 @@ function render(){var main=$("main");main.textContent="";if(!DOC)return;
 function update(){render();}
 function fail(msg){$("main").textContent="";$("main").appendChild(h("section",{class:"sheet"},[h("div",{class:"in"},[h("div",{class:"msg err"},[h("b",{text:"Could not load the report"}),msg])])]));}
 function accept(d){if(!d||!d.views||!d.views.season||!d.composites)throw new Error("not a roto report file (schema 2)");DOC=d;render();}
+function srcFor(){if(SRC)return SRC;return LEAGUE&&REPO?"https://raw.githubusercontent.com/"+REPO+"/data/"+LEAGUE+"/report.json":"report.json";}
 function load(){if(window.__REPORT__){try{accept(window.__REPORT__);}catch(e){fail(String(e.message||e));}return;}
- fetch(SRC+(SRC.indexOf("?")<0?"?t="+Math.floor(Date.now()/60000):""),{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+ if(!SRC&&REPO&&!STATIC&&!LEAGUES.length){   /* the bare homepage: take the league list from leagues.json (served next to the page) and open the first */
+  fetch("leagues.json",{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(j){LEAGUES=(j.leagues||[]).map(String);LEAGUE=LEAGUE||LEAGUES[0]||"";go();},function(){LEAGUES=[""];go();});return;}
+ go();}
+function go(){var SRC_=srcFor();
+ fetch(SRC_+(SRC_.indexOf("?")<0?"?t="+Math.floor(Date.now()/60000):""),{cache:"no-store"}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
   .then(accept,function(e){if(!DOC)fail(String(e.message||e));}).catch(function(e){if(!DOC)fail(String(e.message||e));});}
 $("prev").onclick=function(){step(-1);};$("next").onclick=function(){step(1);};
 document.addEventListener("keydown",function(e){if(!DOC||e.altKey||e.ctrlKey||e.metaKey)return;if(e.key==="ArrowLeft"){step(-1);e.preventDefault();}else if(e.key==="ArrowRight"){step(1);e.preventDefault();}});
