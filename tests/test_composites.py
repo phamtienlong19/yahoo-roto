@@ -173,27 +173,12 @@ class Season(unittest.TestCase):
         self.assertEqual((k["TO"]["week"]["team"], k["TO"]["week"]["week"]), (4, 1))
         self.assertEqual(k["TO"]["week"]["also"], [[2, 2]])                                    # team 2 also had 1 TO, in week 2
 
-    def test_boom_bust_and_consistency(self):
-        _, _, _, c = build()
-        b = c["boomBust"]
-        self.assertEqual((b["1"]["best"], b["1"]["worst"]), ({"week": 1, "total": 6.5}, {"week": 2, "total": 2.0}))
-        self.assertAlmostEqual(b["1"]["stdev"], 2.25)
-        self.assertAlmostEqual(b["3"]["stdev"], 0.25)
-        self.assertEqual([b[str(t)]["rank"] for t in IDS], [3, 3, 1, 1])                       # steadier = better, ties share
-
     def test_power_rank_is_the_plain_average_of_the_component_ranks(self):
         _, _, _, c = build()
         p = c["power"]
         self.assertEqual(p["1"]["ranks"], {"seasonRoto": 4, "weeklyRoto": 4, "seasonAllPlay": 3, "realRecord": 2})
         self.assertEqual([p[str(t)]["avg"] for t in IDS], [3.25, 1.25, 1.75, 3.0])
         self.assertEqual([p[str(t)]["rank"] for t in IDS], [4, 1, 2, 3])
-
-    def test_a_single_week_has_zero_spread(self):
-        weeks = [W1]
-        cores = [yr._core(W1, SPECS)]
-        season = yr._season_view(cores, weeks, SPECS, IDS)
-        c = yr.composites(weeks, cores, SPECS, IDS, season)
-        self.assertEqual(c["boomBust"]["1"]["stdev"], 0)
 
 
 class Shape(unittest.TestCase):
@@ -222,7 +207,7 @@ class Shape(unittest.TestCase):
         self.assertEqual(doc["views"]["seasonFinal"]["weeks"], [1])               # the newest week (2) is in progress: the final snapshot stops at week 1
         self.assertEqual(doc["compositesFinal"]["weeks"], [1])
         self.assertEqual(doc["views"]["season"]["weeks"], [1, 2])
-        self.assertEqual(sorted(doc["composites"]), ["boomBust", "catLuck", "categoryKings", "power", "realRecord", "seasonAllPlay", "seasonRoto", "weekly", "weeklyRoto", "weeks"])
+        self.assertEqual(sorted(doc["composites"]), ["catLuck", "categoryKings", "power", "realRecord", "seasonAllPlay", "seasonRoto", "weekly", "weeklyRoto", "weeks"])
         w1 = doc["views"]["w1"]
         self.assertEqual(w1["matchups"], [[1, 2]])
         self.assertEqual((w1["teams"]["1"]["score"], w1["teams"]["2"]["score"]), (1, 0))

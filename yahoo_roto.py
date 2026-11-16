@@ -611,11 +611,6 @@ def _season_view(cores, weeks_data, specs, ids):
             "teams": _teams_block(ids, specs, tot, res, rec), "matrix": _matrix(cells)}
 
 
-def _stdev(xs):
-    m = sum(xs) / len(xs)
-    return (sum((x - m) ** 2 for x in xs) / len(xs)) ** 0.5            # population standard deviation
-
-
 def composites(weeks_data, cores, specs, ids, season):
     """The season boards, derived only from the weekly data already fetched. `season` is the season view."""
     wk_by = {w["week"]: w for w in weeks_data}
@@ -702,15 +697,6 @@ def composites(weeks_data, cores, specs, ids, season):
         sv = [(t, None, season["teams"][str(t)]["values"][cat]) for t in ids]
         bw = [(t, w, _wval(cores, w, t, sp)) for w in weeks for t in ids]
         kings[cat] = {"season": best(sv), "week": best(bw)}
-    # 6 boom / bust
-    bb = {}
-    for t in ids:
-        tots = [(weekly[str(t)][str(w)]["total"], w) for w in weeks]
-        sd = round(_stdev([x for x, _ in tots]), 9)
-        bb[t] = {"best": {"week": max(tots, key=lambda x: (x[0], -x[1]))[1], "total": max(tots)[0]},
-                 "worst": {"week": min(tots, key=lambda x: (x[0], x[1]))[1], "total": min(tots)[0]}, "stdev": sd}
-    rk = comp_rank({t: bb[t]["stdev"] for t in ids}, high=False)
-    boomBust = {str(t): dict(bb[t], rank=rk[t]) for t in ids}
     # 7 power rank: the plain average of the ranks on boards 1-4 (real record is ranked by its win%)
     comp = {t: {"seasonRoto": seasonRoto[str(t)]["rank"], "weeklyRoto": weeklyRoto[str(t)]["rank"], "seasonAllPlay": seasonAllPlay[str(t)]["rank"],
                 "realRecord": realRank[t]} for t in ids}
@@ -721,7 +707,7 @@ def composites(weeks_data, cores, specs, ids, season):
     rk = comp_rank(avg, high=False)
     power = {str(t): {"ranks": comp[t], "avg": _plain(avg[t]), "rank": rk[t]} for t in ids}
     return {"weeks": weeks, "weekly": weekly, "seasonRoto": seasonRoto, "weeklyRoto": weeklyRoto, "seasonAllPlay": seasonAllPlay, "realRecord": realRecord, "catLuck": catLuck,
-            "categoryKings": kings, "boomBust": boomBust, "power": power}
+            "categoryKings": kings, "power": power}
 
 
 def _wval(cores, week, t, sp):
@@ -1065,7 +1051,7 @@ def _fmt(cat, v):
 
 # ------------------------------------------------------------------ files: self-contained HTML and the three images
 IMAGES = (("roto", "roto", 1680), ("stats", "stats", 1680), ("allplay", "allplay", 2600), ("matchups", "matchups", 1680))        # (page view, file name, css width); drawn at device scale 1.5
-SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "luckweeks", "catluck", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
+SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "luckweeks", "catluck", "kings", "form", "split", "sos", "odds", "power")                   # the season composites; files are season-<board>.png
 SEASON_WIDTH = 1680
 SCALE = 1.5
 
