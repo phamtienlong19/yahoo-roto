@@ -17,7 +17,7 @@ Each table colours only its one or two key columns, so a colour always means one
 
 A **Matchups | Categories** switch on the Luck tab and on Strength of schedule picks wins or categories. The week range (Weeks 1-N, Last 3 / 5 / 8, or any From / to) applies to every season table.
 
-Small trend lines show how luck, form and playoff odds moved week by week. Tap your team's name to highlight it everywhere, **Copy link** shares the exact view, and **Save image** (top right) saves the table as a PNG. It works on phones.
+The Trends view charts luck, rank and Win% by week. Tap your team's name to highlight it everywhere, **Copy link** shares the exact view, and **Save image** (top right) saves the table as a PNG. It works on phones.
 
 ## The numbers in plain words
 - **Roto points:** in each category the best team gets the most points and the worst gets 1. Ties share.
@@ -52,7 +52,7 @@ To show a defending champion's crown, add `"champions": {"<league id>": "<team n
 
 ## Keeping it fresh
 - The feed refreshes about every 3 minutes while games are being played, and slows down when nothing changes.
-- Yahoo and the NBA fix box scores for a day or two. Corrected weeks are re-read automatically, and the page shows what changed.
+- A week counts as over when Yahoo itself moves to the next one. Yahoo and the NBA fix box scores until a set Monday: closed weeks are re-read until then, the page says what may still change, and it shows what did.
 - If a league fails to refresh several times in a row, the workflow opens one GitHub issue, and the page says why its data looks old.
 - Changing the code on `main` restarts the feed, so new features reach the data within minutes.
 - A daily check runs against a real league and fails if Yahoo's pages change shape.
