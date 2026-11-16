@@ -340,7 +340,7 @@ class Browser(unittest.TestCase):
         self.assertIn("Wk 4 is complete; Yahoo may still correct box scores until Mon 16 Nov (4 pending, 22 arrived too late to count)", self.R["settledStatus"])
         self.assertNotIn("still being played", self.R["settledStatus"])
         self.assertNotIn("in progress", self.R["settledStatus"])
-        self.assertEqual(self.R["settledRows"], [18] * 6)                                       # every table still draws without a live week
+        self.assertEqual([n >= 18 for n in self.R["settledRows"][:5]], [True] * 5, self.R["settledRows"])      # every table still draws without a live week (odds adds division rows; trends is a chart)
         self.assertIn("Wk 4 is complete", self.R["settledWeekStatus"])
         self.assertIn("Week 4", self.R["settledWeekH1"])
 
