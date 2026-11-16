@@ -17,7 +17,7 @@ Each table colours only its one or two key columns, so a colour always means one
 
 A **Matchups | Categories** switch on the Luck tab and on Strength of schedule picks wins or categories. The week range (Weeks 1-N, Last 3 / 5 / 8, or any From / to) applies to every season table.
 
-Small trend lines show how luck, form and playoff odds moved week by week. Tap your team's name to highlight it everywhere, **Copy link** shares the exact view, and **Save image** (top right) saves the table as a PNG. It works on phones.
+The Trends view charts luck, rank and Win% by week. Tap your team's name to highlight it everywhere, **Copy link** shares the exact view, and **Save image** (top right) saves the table as a PNG. It works on phones.
 
 ## The numbers in plain words
 - **Roto points:** in each category the best team gets the most points and the worst gets 1. Ties share.
