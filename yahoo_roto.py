@@ -718,6 +718,7 @@ def _wval(cores, week, t, sp):
 # ------------------------------------------------------------------ playoff odds
 SIMS = 50000                   # simulated rest-of-seasons: any figure is accurate to within about +-0.4 percentage points (95%)
 PRIOR_WEEKS = 2                # a team's weekly average counts as this many weeks of league-average play too (early in the season a few weeks say little)
+HIST_SIMS = 4000                # the odds after each finished week are simulated with fewer seasons (they only draw a trend line)
 SCHEDULE_PAGES_PER_PASS = 400  # the whole remaining schedule is read in the first pass (9 pages a week for 18 teams) and remembered; this only caps a runaway
 SCHEDULE_REFRESH = 24 * 3600   # a remembered week is read again after a day (a commissioner can change the schedule) ...
 SCHEDULE_REFRESH_WEEKS = 2     # ... but at most this many weeks per pass, oldest first, so the refresh is a trickle
@@ -879,6 +880,60 @@ def odds_path(cache, league):
     return os.path.join(cache, "%s-odds.json" % league) if cache else None
 
 
+def history_path(cache, league):
+    return os.path.join(cache, "%s-odds-history.json" % league) if cache else None
+
+
+def cat_points_through(weeks_data, specs, ids):
+    """Category points after each of the given weeks, as a list of {team: points} (index 0 = after the first week); a won category is 1, a level one 0.5."""
+    pts, out = {t: 0.0 for t in ids}, []
+    for wk in weeks_data:
+        tot = totals([wk], wk["teams"])
+        for a, b in wk.get("matchups", []):
+            r = head_to_head(tot[a], tot[b], specs)
+            pts[a] += r[0] + r[2] / 2
+            pts[b] += r[1] + r[2] / 2
+        out.append(dict(pts))
+    return out
+
+
+def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league):
+    """The playoff chances as they stood after each finished week: [{"week": k, "teams": {team: chance}}]. Week k uses only what was known then (strengths and category points
+    from weeks 1..k) and the real pairings of the weeks after it (`pairs_after`: week -> pairs or None). Each week is simulated once and remembered by a fingerprint of its inputs,
+    so only a week whose inputs changed (a stat correction, a newly read schedule week) is simulated again."""
+    spots = settings.get("playoff_teams")
+    divisions = settings.get("divisions") or {}
+    done = len(weeks_data) - 1
+    pts = cat_points_through(weeks_data[:done], specs, ids)
+    p = history_path(cache, league)
+    try:
+        with open(p, encoding="utf-8") as f:
+            saved = json.load(f)
+        saved = saved if isinstance(saved, dict) else {}
+    except (OSError, ValueError, TypeError):
+        saved = {}
+    out, changed = [], False
+    for k in range(1, done + 1):
+        st = strengths(weeks_data[:k], specs, ids)
+        if not st:
+            continue
+        remaining = [pairs_after.get(w) for w in range(k + 1, regular + 1)]
+        inputs = {"v": 1, "sims": HIST_SIMS, "spots": spots, "dw": bool(settings.get("div_winners")), "points": pts[k - 1], "div": sorted(divisions.items()),
+                  "sched": [sorted(map(list, wk)) if wk else None for wk in remaining],
+                  "st": {c: {"sd": round(v["sd"], 9), "lower": v["lower"], "mean": sorted((t, round(x, 9)) for t, x in v["mean"].items())} for c, v in st.items()}}
+        fp = hashlib.sha1(json.dumps(inputs, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        entry = saved.get(str(k))
+        if not (isinstance(entry, dict) and entry.get("fp") == fp and isinstance(entry.get("teams"), dict)):
+            res = simulate(st, ids, pts[k - 1], remaining, divisions, spots, settings.get("div_winners"), sims=HIST_SIMS, seed=int(league) * 1000 + k)
+            entry = {"fp": fp, "teams": {str(t): round(r["playoff"], 4) for t, r in res.items()}}
+            saved[str(k)] = entry
+            changed = True
+        out.append({"week": k, "teams": entry["teams"]})
+    if changed and p:
+        write_atomic(p, json.dumps(saved, separators=(",", ":")))
+    return out
+
+
 def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, base, cache, now):
     """The `odds` part of the report, or None when it cannot be made (the league's playoff setup is not on the settings page, or no week has finished). The simulation
     only runs when its inputs changed since the last pass (points so far, team strengths, schedule, playoff setup): the answer is remembered in the cache."""
@@ -918,6 +973,9 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
            "divisions": sorted(set(divisions.values())) or None, "divisionWinners": bool(settings.get("div_winners") and divisions),
            "teams": {str(t): {"playoff": r4(r["playoff"]), "first": r4(r["first"]), "rank": r4(r["rank"]), "dist": [r4(x) for x in r["dist"]],
                               "division": divisions.get(t), "points": points[t]} for t, r in res.items()}}
+    pairs_after = {wk["week"]: wk.get("matchups") or None for wk in weeks_data}
+    pairs_after.update({w: sched.get(w) for w in left[1:]})
+    out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league)
     if p:
         write_atomic(p, json.dumps({"fp": fp, "odds": out}, separators=(",", ":")))
     return out
