@@ -1,0 +1,41 @@
+name: Restart live feed
+
+# A "Roto live" run keeps the code it was started from for its whole ~2 hour life, and the run queued behind it is pinned to an older commit too, so a merge could take
+# hours to reach the published reports (new report fields, champion crowns...). When the code that builds the reports changes on main, cancel the live runs that carry
+# the old code and start one on this commit. The new run queues its own successor as usual.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - yahoo_roto.py
+      - cadence.py
+      - index.html
+      - leagues.json
+      - .github/workflows/roto-live.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: restart-live
+  cancel-in-progress: false
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel the live runs on old code and start one on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for state in in_progress queued pending waiting; do
+            for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow roto-live.yml --status "$state" --json databaseId --jq '.[].databaseId'); do
+              echo "cancelling run $id ($state)"
+              gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
+            done
+          done
+          gh workflow run roto-live.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
