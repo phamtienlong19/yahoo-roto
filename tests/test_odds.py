@@ -67,6 +67,15 @@ class Schedule(unittest.TestCase):
             broken = golden.FakeFetcher({"settings": "x"})                             # every page raises
             self.assertEqual(yr.fetch_schedule(broken, "9", self.base, self.ids, [8], d, 1000, budget=100), {})
 
+    def test_known_weeks_are_refreshed_a_couple_at_a_time(self):
+        with tempfile.TemporaryDirectory() as d:
+            yr.fetch_schedule(self.fx, "9", self.base, self.ids, [4, 5, 6, 7], d, 1000)
+            calls = []
+            get = self.fx.get
+            self.fx.get = lambda url, ttl=None: (calls.append(url), get(url, ttl))[1]
+            yr.fetch_schedule(self.fx, "9", self.base, self.ids, [4, 5, 6, 7], d, 1000 + yr.SCHEDULE_REFRESH + 1)
+            self.assertEqual(len(calls), 2 * self.n // 2)                                           # two weeks of the four, not all of them
+
     def test_a_damaged_schedule_file_is_ignored(self):
         with tempfile.TemporaryDirectory() as d:
             with open(os.path.join(d, "9-schedule.json"), "w") as f:
@@ -122,6 +131,35 @@ class Simulation(unittest.TestCase):
         self.assertEqual(with_divs[4]["playoff"], 0.0)                                        # the 4th East team is the one left out
 
 
+class Accuracy(unittest.TestCase):
+    def test_the_simulation_agrees_with_an_exact_calculation_on_a_small_league(self):
+        ids = [1, 2, 3, 4]
+        st = flat_strength(ids, cats=5, mean={1: 112.0, 2: 104.0, 3: 96.0, 4: 90.0}, sd=12.0)
+        points = {1: 20.0, 2: 21.0, 3: 22.5, 4: 19.0}
+        weeks = [[(1, 2), (3, 4)], [(1, 3), (2, 4)]]
+        import itertools
+        exact = {t: 0.0 for t in ids}
+        dists = {}
+        for w in weeks:
+            for a, b in w:
+                dists[(a, b)] = yr.cat_win_distribution(a, b, st)
+        outcomes = [(wk, a, b) for wk in range(2) for a, b in weeks[wk]]
+        for ks in itertools.product(range(6), repeat=len(outcomes)):
+            pr = 1.0
+            pts = dict(points)
+            for k, (wk, a, b) in zip(ks, outcomes):
+                pr *= dists[(a, b)][k]
+                pts[a] += k
+                pts[b] += 5 - k
+            for t in ids:
+                g = sum(1 for o in ids if pts[o] > pts[t])
+                e = sum(1 for o in ids if o != t and pts[o] == pts[t])
+                exact[t] += pr * (0.0 if g >= 2 else 1.0 if g + e + 1 <= 2 else (2 - g) / (e + 1))
+        res = yr.simulate(st, ids, points, weeks, spots=2, sims=60000, seed=3)
+        for t in ids:
+            self.assertAlmostEqual(res[t]["playoff"], exact[t], delta=0.012, msg="team %d" % t)
+
+
 class InTheReport(unittest.TestCase):
     def test_the_report_carries_odds_when_the_league_states_its_playoffs(self):
         with tempfile.TemporaryDirectory() as d:
@@ -133,10 +171,30 @@ class InTheReport(unittest.TestCase):
             self.assertAlmostEqual(sum(t["playoff"] for t in o["teams"].values()), 6, places=2)
             self.assertEqual(len(o["teams"]), 18)
             self.assertEqual(len(o["teams"]["1"]["dist"]), 18)
+            self.assertEqual((o["sims"], o["scheduleWeeks"], o["complete"]), (50000, 7, True))     # the whole schedule is read in the first pass
+            self.assertAlmostEqual(o["margin"], 0.44, places=2)
             with open(os.path.join(d, "9-schedule.json")) as f:
-                self.assertTrue(json.load(f))                                                   # the pairings were remembered
-            again = golden.build_report(18, 4, regular=10, divisions=True, cache=d)
-            self.assertGreater(again["odds"]["scheduleWeeks"], o["scheduleWeeks"])             # and the next pass reads more of them
+                self.assertEqual(len(json.load(f)), 6)                                              # the pairings of the six future weeks were remembered
+
+    def test_a_week_that_cannot_be_read_leaves_the_odds_incomplete_not_missing(self):
+        doc = golden.build_report(18, 4, regular=10, drop=(9, 10))
+        o = doc["odds"]
+        self.assertEqual((o["scheduleWeeks"], o["complete"]), (5, False))
+        self.assertAlmostEqual(sum(t["playoff"] for t in o["teams"].values()), 6, places=2)
+
+    def test_unchanged_inputs_reuse_the_saved_answer_and_a_change_recomputes(self):
+        with tempfile.TemporaryDirectory() as d:
+            first = golden.build_report(18, 4, regular=10, cache=d)["odds"]
+            real = yr.simulate
+            calls = []
+            yr.simulate = lambda *a, **k: (calls.append(1), real(*a, **k))[1]
+            try:
+                again = golden.build_report(18, 4, regular=10, cache=d)["odds"]
+                self.assertEqual((again, calls), (first, []))                                       # same data: no simulation
+                golden.build_report(18, 5, regular=10, cache=d)
+                self.assertEqual(len(calls), 1)                                                     # one more week finished: simulated again
+            finally:
+                yr.simulate = real
 
     def test_a_league_without_playoff_text_has_no_odds(self):
         self.assertIsNone(golden.build_report(18, 4)["odds"])
