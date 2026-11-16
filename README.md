@@ -42,6 +42,7 @@ moved, roto-rank moves for that week, matchup results that flipped) and a dot on
 
 ### Operations
 - **Alerts:** each pass records failures per league; after 5 in a row the workflow opens one GitHub issue ("Roto feed failing: league ID"), and `status.json` on the `data` branch lets the page say why a report looks old. Network failures, 5xx and 429 are retried before a pass counts as failed.
+- **Restart on code changes:** a live run keeps the code it started with for about two hours, so `restart-live.yml` cancels the live runs and starts a new one whenever `yahoo_roto.py`, `cadence.py`, `index.html`, `leagues.json` or the live workflow change on `main`. New report fields reach the published reports within minutes of a merge instead of hours.
 - **Canary:** `canary.yml` runs `canary.py` daily against one real league; a red run means Yahoo's pages changed shape (or blocked the runner).
 - See `ARCHITECTURE.md` for how the pieces fit and `CONTRIBUTING.md` for running and extending the tests.
 
