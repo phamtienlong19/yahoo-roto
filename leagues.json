@@ -3,12 +3,14 @@
   "leagues": [
     85092,
     207464,
-    212003
+    212003,
+    49486
   ],
   "names": {
     "85092": "NBA Talk VN - Dynasty",
     "207464": "NBA Talk VN - Serie A",
-    "212003": "Super Cup 26-27"
+    "212003": "Super Cup 26-27",
+    "49486": "NBA Champions League 23rd 2026"
   },
   "champions": {
     "85092": "m jordat",
