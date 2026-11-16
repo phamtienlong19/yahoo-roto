@@ -571,6 +571,8 @@ def _week_view(core, wk, specs, ids):
     teams = _teams_block(ids, specs, core["tot"], res, rec)
     for t in ids:
         teams[str(t)]["score"] = _plain(wk["teams"][t].get("score")) if t in wk["teams"] else None
+        # made/attempts of the percentage categories: the page re-adds weeks into any range (a ratio cannot be summed from its value)
+        teams[str(t)]["raw"] = {sp["cat"]: list(core["tot"][t][sp["col"]]) for sp in specs if sp["kind"] == "pct" and core["tot"].get(t, {}).get(sp["col"]) is not None}
     return {"label": "Week %d" % wk["week"], "weeks": [wk["week"]], "order": ro, "allPlayOrder": ap, "teams": teams, "matrix": _matrix(core["cells"]),
             "matchups": wk.get("matchups", [])}
 
@@ -705,7 +707,7 @@ def _wval(cores, week, t, sp):
     return _plain(cat_value(c["tot"][t], sp))
 
 
-SCHEMA_VERSION = 3          # 2 = the original report; 3 added the final-weeks snapshot, the champion and corrections. The page refuses a report newer than it knows.
+SCHEMA_VERSION = 3          # 2 = the original report; 3 added the final-weeks snapshot, the champion and corrections. Additive fields (like each week's made/attempts, `raw`) do not bump it: the page feature-detects them. The page refuses a report newer than it knows.
 
 
 def configured_champion(league, root=None):
@@ -862,7 +864,7 @@ def _fmt(cat, v):
 
 # ------------------------------------------------------------------ files: self-contained HTML and the three images
 IMAGES = (("roto", "roto", 1680), ("stats", "stats", 1680), ("allplay", "allplay", 2600))        # (page view, file name, css width); drawn at device scale 1.5
-SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "catluck", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
+SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "luckweeks", "catluck", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
 SEASON_WIDTH = 1680
 SCALE = 1.5
 

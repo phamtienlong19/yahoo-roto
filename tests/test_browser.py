@@ -31,6 +31,9 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  var p=await load('season=1&board=boom');
  R.ready=p.d.body.getAttribute('data-ready');R.h1a=txt(p.d.querySelector('h1'));R.snapButtons=p.d.querySelectorAll('.snapbar button').length;
  p.d.querySelectorAll('.snapbar button')[1].click();R.h1b=txt(p.d.querySelector('h1'));
+ var sf=p.d.querySelector('.snapbar select[aria-label="From week"]');sf.value='2';sf.dispatchEvent(new p.w.Event('change'));R.h1c=txt(p.d.querySelector('h1'));R.url=p.w.location.search;
+ R.activeChips=p.d.querySelectorAll('.snapbar button.on').length;
+ p=await load('season=1&board=luckweeks&range=2-3');R.lwH1=txt(p.d.querySelector('h1'));R.lwCols=p.d.querySelectorAll('.tscroll .st thead tr:last-child th').length;R.lwRows=p.d.querySelectorAll('.st tbody tr').length;
  p=await load('week=4&view=stats');
  var heads=[].slice.call(p.d.querySelectorAll('.st thead tr:last-child th')),ix=heads.map(txt).indexOf('PTS');
  R.crowns=p.d.querySelectorAll('.st th.team .crown').length;R.vs=p.d.querySelectorAll('.st th.team .vs').length;R.scoreClasses=[].slice.call(p.d.querySelectorAll('td.score')).map(function(e){return e.className.replace('score ','')});
@@ -97,6 +100,15 @@ class Browser(unittest.TestCase):
         self.assertEqual(self.R["snapButtons"], 2)
         self.assertIn("Weeks 1-3", self.R["h1a"])
         self.assertIn("Weeks 1-4", self.R["h1b"])
+
+    def test_the_week_range_picks_any_weeks_and_lives_in_the_link(self):
+        self.assertIn("Weeks 2-4", self.R["h1c"])
+        self.assertIn("range=2-4", self.R["url"])
+        self.assertEqual(self.R["activeChips"], 0)                       # a custom range is neither of the two preset chips
+
+    def test_luck_by_week_has_a_column_per_week_in_the_range(self):
+        self.assertIn("Weeks 2-3", self.R["lwH1"])
+        self.assertEqual((self.R["lwCols"], self.R["lwRows"]), (1 + 2 + 2, 18))
 
     def test_the_crown_the_opponent_line_and_the_score_colours(self):
         self.assertEqual(self.R["crowns"], 1)
