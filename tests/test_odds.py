@@ -160,6 +160,36 @@ class Accuracy(unittest.TestCase):
             self.assertAlmostEqual(res[t]["playoff"], exact[t], delta=0.012, msg="team %d" % t)
 
 
+class History(unittest.TestCase):
+    def test_the_odds_after_each_finished_week_are_kept_and_end_where_the_odds_are_now(self):
+        with tempfile.TemporaryDirectory() as d:
+            doc = golden.build_report(18, 5, regular=10, cache=d)
+            o = doc["odds"]
+            self.assertEqual([h["week"] for h in o["history"]], [1, 2, 3, 4])                       # a snapshot after each finished week
+            for h in o["history"]:
+                self.assertAlmostEqual(sum(h["teams"].values()), 6, places=1)                        # the playoff places are always handed out
+            last = o["history"][-1]["teams"]
+            for t, v in o["teams"].items():
+                self.assertAlmostEqual(last[t], v["playoff"], delta=0.06)                            # the last snapshot is the current odds (fewer seasons)
+            self.assertTrue(os.path.exists(os.path.join(d, "9-odds-history.json")))
+
+    def test_each_week_is_simulated_once_and_only_a_changed_week_again(self):
+        with tempfile.TemporaryDirectory() as d:
+            golden.build_report(18, 4, regular=10, cache=d)
+            real, sims = yr.simulate, []
+            yr.simulate = lambda *a, **k: (sims.append(k.get("sims", yr.SIMS)), real(*a, **k))[1]
+            try:
+                golden.build_report(18, 5, regular=10, cache=d)
+            finally:
+                yr.simulate = real
+            self.assertEqual(sims.count(yr.SIMS), 1)                                                  # the current odds, once
+            self.assertEqual(sims.count(yr.HIST_SIMS), 1)                                             # only the newly finished week: the earlier snapshots were remembered
+
+    def test_the_history_is_repeatable(self):
+        a = golden.build_report(18, 4, regular=10)["odds"]["history"]
+        self.assertEqual(a, golden.build_report(18, 4, regular=10)["odds"]["history"])
+
+
 class InTheReport(unittest.TestCase):
     def test_the_report_carries_odds_when_the_league_states_its_playoffs(self):
         with tempfile.TemporaryDirectory() as d:
@@ -187,12 +217,12 @@ class InTheReport(unittest.TestCase):
             first = golden.build_report(18, 4, regular=10, cache=d)["odds"]
             real = yr.simulate
             calls = []
-            yr.simulate = lambda *a, **k: (calls.append(1), real(*a, **k))[1]
+            yr.simulate = lambda *a, **k: (calls.append(k.get("sims", yr.SIMS)), real(*a, **k))[1]
             try:
                 again = golden.build_report(18, 4, regular=10, cache=d)["odds"]
                 self.assertEqual((again, calls), (first, []))                                       # same data: no simulation
                 golden.build_report(18, 5, regular=10, cache=d)
-                self.assertEqual(len(calls), 1)                                                     # one more week finished: simulated again
+                self.assertEqual(calls.count(yr.SIMS), 1)                                           # one more week finished: the odds are simulated again
             finally:
                 yr.simulate = real
 

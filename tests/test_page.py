@@ -34,6 +34,21 @@ class Page(unittest.TestCase):
                 out = subprocess.run(["node", "--check", path], capture_output=True, text=True, timeout=30)
                 self.assertEqual(out.returncode, 0, "script %d: %s" % (i, out.stderr))
 
+    def test_sparkline_geometry(self):
+        g = js("RotoPure.sparkGeom([1,3,2,null,4],100,20,{})")
+        self.assertEqual(len(g["pts"]), 4)                                                      # the missing value is skipped
+        self.assertIsNone(g["baseY"])
+        self.assertEqual(g["pts"][0][0], 3)                                                      # padding on the left
+        self.assertLess(g["pts"][3][1], g["pts"][0][1])                                         # a higher value is drawn higher
+        inv = js("RotoPure.sparkGeom([1,3],100,20,{invert:true})")
+        self.assertGreater(inv["pts"][1][1], inv["pts"][0][1])                                  # inverted (ranks): lower is drawn higher
+        self.assertIsNotNone(js("RotoPure.sparkGeom([-1,2],100,20,{base:0})")["baseY"])                    # a baseline (zero luck, an average week) is drawn when given
+        shared = js("[RotoPure.sparkGeom([0,1],100,20,{lo:-10,hi:10,base:0}),RotoPure.sparkGeom([0,1],100,20,{})]")
+        self.assertGreater(shared[0]["pts"][1][1], shared[1]["pts"][1][1])                      # rows of one column share a scale: a small move stays small
+        flat = js("RotoPure.sparkGeom([5,5,5],100,20,{})")
+        self.assertEqual(len({p[1] for p in flat["pts"]}), 1)                                   # a flat series is a flat line
+        self.assertIsNone(js("RotoPure.sparkGeom([5,null],100,20,{})"))                         # fewer than two values: nothing to draw
+
     def test_the_readme_stays_short_and_plain(self):
         with open(os.path.join(HERE, "..", "README.md"), encoding="utf-8") as f:
             text = f.read()
@@ -107,8 +122,8 @@ class Page(unittest.TestCase):
 
     def test_number_formats(self):
         self.assertEqual(js("[RotoPure.fmtVal(true,0.4817),RotoPure.fmtVal(false,68),RotoPure.fmtVal(false,571),RotoPure.fmtVal(true,1),RotoPure.fmtVal(false,null)]"), [".482", "68", "571", "1.000", "–"])
-        self.assertEqual(js("[RotoPure.fmtPts(6.5),RotoPure.fmtPts(9),RotoPure.pct3(0.88235),RotoPure.pct3(0),RotoPure.signed(0.1667,2),RotoPure.signed(-1/3,2)]"),
-                         ["6.5", "9", "0.882", "0.000", "+0.17", "−0.33"])
+        self.assertEqual(js("[RotoPure.fmtPts(6.5),RotoPure.fmtPts(9),RotoPure.pct(0.88235),RotoPure.pct(0),RotoPure.signed(0.1667,2),RotoPure.signed(-1/3,2)]"),
+                         ["6.5", "9", "88.2%", "0.0%", "+0.17", "−0.33"])
 
 
 if __name__ == "__main__":
