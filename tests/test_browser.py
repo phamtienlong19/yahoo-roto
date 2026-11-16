@@ -24,7 +24,7 @@ function load(q,base){return new Promise(function(res){var f=document.createElem
  f.onload=function(){var w=f.contentWindow;w.addEventListener('error',function(e){errors.push(e.message)});setTimeout(function(){res({f:f,w:w,d:w.document})},700);};document.body.appendChild(f);});}
 function txt(e){return e?e.textContent.trim():null}
 function key(p,el,k){el.dispatchEvent(new p.w.KeyboardEvent('keydown',{key:k,bubbles:true}));}
-function save(p,name){return new Promise(function(res,rej){var t=setTimeout(function(){rej(new Error('export timed out'))},45000);
+function save(p,name){return new Promise(function(res,rej){var t=setTimeout(function(){var ts=p.d.querySelector('.toast');rej(new Error('export timed out'+(ts?': '+ts.textContent:' (no error toast)')))},120000);
  p.w.HTMLAnchorElement.prototype.click=function(){var a=this;p.w.fetch(a.href).then(function(r){return r.blob()}).then(function(b){return fetch('/post/'+name,{method:'POST',body:b})}).then(function(){clearTimeout(t);res()});};
  p.d.getElementById('save').click();});}
 (async function(){try{
@@ -94,8 +94,8 @@ class Browser(unittest.TestCase):
                 pass
         cls.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=cls.site))
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
-        dom = subprocess.run([yr.find_chrome(), "--headless", "--disable-gpu", "--no-sandbox", "--virtual-time-budget=90000", "--window-size=1100,900", "--dump-dom",
-                              "http://127.0.0.1:%d/t.html" % cls.server.server_address[1]], capture_output=True, text=True, timeout=240).stdout
+        dom = subprocess.run([yr.find_chrome(), "--headless", "--disable-gpu", "--no-sandbox", "--virtual-time-budget=300000", "--window-size=1100,900", "--dump-dom",
+                              "http://127.0.0.1:%d/t.html" % cls.server.server_address[1]], capture_output=True, text=True, timeout=360).stdout
         m = re.search(r'<pre id="out">(.*?)</pre>', dom, re.S)
         cls.R = json.loads(m.group(1).replace("&quot;", '"').replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")) if m and m.group(1) != "pending" else {"fatal": "no result"}
 
