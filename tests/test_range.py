@@ -87,6 +87,25 @@ class RangeParity(unittest.TestCase):
     def test_other_ranges_match_a_report_built_from_just_those_weeks(self):
         self.check([[2, 3], [3, 4], [2, 4], [4, 4], [1, 2]])
 
+    def test_category_luck_by_week_adds_up_to_the_season_figure_and_is_zero_sum(self):
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "doc.json")
+            with open(path, "w") as f:
+                json.dump(self.doc, f)
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify(d.weeks.map(function(w){return RotoPure.catLuckWeek(d,w)})))" % path
+            out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        per_week = json.loads(out.stdout)
+        cats = [c["cat"] for c in self.doc["categories"]]
+        for w, week in zip(self.doc["weeks"], per_week):
+            for c in cats:
+                self.assertAlmostEqual(sum(t[c][0] - t[c][1] for t in week.values()), 0, places=6, msg="week %d %s" % (w, c))
+        for t, ref in self.doc["composites"]["catLuck"].items():
+            for c in cats:
+                self.assertAlmostEqual(sum(wk[t][c][0] - wk[t][c][1] for wk in per_week), ref["byCat"][c]["diff"], places=6)
+
     def test_a_report_without_made_attempts_is_refused_not_misread(self):
         old = json.loads(json.dumps(self.doc))
         for k, v in old["views"].items():
