@@ -20,6 +20,11 @@ import yahoo_roto as yr  # noqa: E402
 
 HARNESS = r"""<!doctype html><meta charset=utf-8><body><pre id=out>pending</pre><script>
 var R={},errors=[];
+var COLOURS=[['board=real',['Wins','Expected wins','Luck','Rank','Expected rank','Places vs expected']],['board=luck&lens=summary&basis=cats',['Categories won','Expected categories','Category luck','Rank','Expected rank']],
+ ['board=luck&lens=week',['Wk 2','Luck','Rank']],['board=luck&lens=cat',['Won','Expected','Luck','PTS','TO','Rank']],['board=outlook&lens=sos',["Opponents' record",'SOS','Rank']],['board=outlook&lens=odds',['Top seed','Projected rank','Category points']],
+ ['board=weekly',['Points','Per week','Rank']],['board=allplay',['W-L-T','Win%','Rank']],['board=power',['Season Roto','Weekly Roto','Season All-Play','Real Record','Average','Power']],['board=roto',['Total','Rank']],['board=matchlog',['All-play Win%',"Opponent's Win%",'Luck']]];
+var COPYQ=['season=1&board=roto','season=1&board=totals','season=1&board=matrix','season=1&board=weekly','season=1&board=allplay','season=1&board=real','season=1&board=luck&lens=summary&basis=cats','season=1&board=luck&lens=week','season=1&board=luck&lens=week&basis=cats','season=1&board=luck&lens=cat',
+ 'season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=odds','season=1&board=kings','season=1&board=boom','season=1&board=power','week=3&view=roto','week=3&view=stats','week=3&view=allplay','week=3&view=matchups'];
 var FITS=['board=roto','board=totals','board=matrix','board=weekly','board=allplay','board=real','board=luck&lens=summary&basis=cats','board=luck&lens=week','board=luck&lens=week&basis=cats','board=luck&lens=cat','board=outlook&lens=sos','board=outlook&lens=sos&basis=cats','board=outlook&lens=odds','board=kings','board=boom','board=power'];
 function load(q,base,width){return new Promise(function(res){var f=document.createElement('iframe');f.style.cssText='width:'+(width||1100)+'px;height:900px;border:0';f.src=(base||'')+'index.html?'+q;
  f.onload=function(){var w=f.contentWindow;w.addEventListener('error',function(e){errors.push(e.message)});setTimeout(function(){res({f:f,w:w,d:w.document})},700);};document.body.appendChild(f);});}
@@ -55,6 +60,12 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p=await load('season=1&board=outlook&lens=sos&basis=cats&range=1-3');R.sosCatRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));
  p=await load('season=1&board=outlook&lens=odds','pre/');R.preBanner=txt(p.d.querySelector('.pre'));R.preSub=txt(p.d.querySelector('.view-subtitle'));
  p=await load('season=1&board=outlook&lens=odds','none/');R.noneMsg=txt(p.d.querySelector('.msg'));R.noneTabs=[].slice.call(p.d.querySelectorAll('#nav button')).map(txt);
+ R.colour=[];
+ for(var spec of COLOURS){p=await load('season=1&'+spec[0]);var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
+  spec[1].forEach(function(hd){var i=hs.indexOf(hd),sh={};if(i>=0)[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.colour.push([spec[0],hd,i,Object.keys(sh)]);});}
+ R.copy=[];
+ for(var q of COPYQ){p=await load(q);R.copy.push([q,txt(p.d.querySelector('details.how p')),txt(p.d.querySelector('.view-subtitle')),[].slice.call(p.d.querySelectorAll('.tscroll th[title]')).map(function(e){return e.getAttribute('title')})]);}
+ R.strip=[].slice.call(p.d.querySelectorAll('.strip button')).map(txt).slice(0,3);
  R.fit=[];
  for(var q of FITS){p=await load('static=1&season=1&'+q,'long/',1680);var sc=p.d.querySelector('.tscroll');R.fit.push([q,sc?sc.scrollWidth-sc.clientWidth:null,txt(p.d.querySelector('h1')),sc&&sc.querySelector('table').style.fontSize||'']);}
  p=await load('season=1&board=matchlog&range=1-3');R.mlRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.mlH1=txt(p.d.querySelector('h1'));
@@ -157,7 +168,7 @@ class Browser(unittest.TestCase):
         self.assertNotEqual(self.R["cwCells"][:2], self.R["cwPickCells"][:2])            # picking PTS changes the numbers
         self.assertIn("· PTS", self.R["cwPickH1"])
         self.assertIn("Category Luck", self.R["clH1"])                                   # board=catluck still opens the by-category view
-        self.assertEqual(self.R["catHeads"], ["Team", "Real cats", "Exp. cats", "Cat luck", "FG%", "FT%", "3PTM", "PTS", "REB", "AST", "ST", "BLK", "TO", "Rank"])   # no matchup luck mixed in
+        self.assertEqual(self.R["catHeads"], ["Team", "Won", "Expected", "Luck", "FG%", "FT%", "3PTM", "PTS", "REB", "AST", "ST", "BLK", "TO", "Rank"])   # no matchup luck mixed in
         self.assertEqual(self.R["catBasisButtons"], 0)                                   # by category is always categories: no switch
 
     def test_an_older_report_without_made_attempts_says_why_custom_ranges_are_missing(self):
@@ -188,8 +199,8 @@ class Browser(unittest.TestCase):
 
     def test_the_summary_follows_the_matchups_or_categories_switch(self):
         self.assertEqual(self.R["smBasisButtons"], ["Matchups", "Categories"])
-        self.assertEqual(self.R["smHeads"], ["Team", "W-L-T", "Real wins", "Exp. wins", "Luck", "Real rank", "Exp. rank", "Diff"])
-        self.assertEqual(self.R["smcHeads"], ["Team", "Cat W-L-T", "Real cats", "Exp. cats", "Cat luck", "Real rank", "Exp. rank", "Diff"])
+        self.assertEqual(self.R["smHeads"], ["Team", "Record", "Wins", "Expected wins", "Luck", "Rank", "Expected rank", "Places vs expected"])
+        self.assertEqual(self.R["smcHeads"], ["Team", "Category record", "Categories won", "Expected categories", "Category luck", "Rank", "Expected rank", "Places vs expected"])
         self.assertIn("Category Record & Luck", self.R["smcH1"])
         self.assertEqual(self.R["smRows"], 18)
         self.assertEqual(len(self.R["smRec"].split("-")), 3)                              # a matchup record: W-L-T over a few matchups
@@ -197,19 +208,19 @@ class Browser(unittest.TestCase):
 
     def test_playoff_odds_view(self):
         self.assertIn("Playoff Odds", self.R["odH1"])
-        self.assertEqual(self.R["odHeads"], ["Team", "Div", "Playoffs", "Top seed", "Proj. rank", "Cat pts", "Finishing place"])
+        self.assertEqual(self.R["odHeads"], ["Team", "Div", "Playoffs", "Top seed", "Projected rank", "Category points", "Finishing place"])
         self.assertEqual((self.R["odRows"], self.R["odBars"], self.R["odIn"]), (18, 18, 6))        # a bar per place, the six playoff places in green
         self.assertEqual(self.R["odRange"], 0)                                                       # the week range does not apply to it
         self.assertRegex(self.R["odPct"], r"^(>99|<1|\d+)%$")
 
     def test_strength_of_schedule_is_the_opponents_record_on_either_basis(self):
         self.assertIn("Strength of Schedule", self.R["sosH1"])
-        self.assertEqual(self.R["sosHeads"], ["Team", "Opp record", "SOS", "Rank"])
+        self.assertEqual(self.R["sosHeads"], ["Team", "Opponents' record", "SOS", "Rank"])
         self.assertEqual(self.R["sosRows"], 18)
         self.assertGreater(sum(int(x) for x in self.R["sosCatRec"].split("-")), sum(int(x) for x in self.R["sosRec"].split("-")))   # category games are nine to a matchup
 
     def test_the_odds_say_when_the_schedule_is_incomplete_or_missing(self):
-        self.assertIn("Preliminary: 3 of the 7", self.R["preBanner"])
+        self.assertIn("Preliminary: 3 of 7", self.R["preBanner"])
         self.assertIn("50,000 simulated seasons", self.R["preSub"])
         self.assertIn("No playoff odds in this report yet", self.R["noneMsg"])
         self.assertEqual(self.R["noneTabs"][3], "Outlook")                                # the tab is still there, with the explanation
@@ -219,6 +230,26 @@ class Browser(unittest.TestCase):
         for q, overflow, h1, _ in self.R["fit"]:
             self.assertIsNotNone(h1, q)
             self.assertLessEqual(overflow, 1, "%s runs %s px wider than the image" % (q, overflow))
+
+    def test_every_comparing_column_uses_the_rank_shades(self):
+        for q, header, index, shades in self.R["colour"]:
+            self.assertGreaterEqual(index, 0, "%s: no column %r" % (q, header))
+            self.assertTrue(any(s.startswith("green") for s in shades) and any(s.startswith("red") for s in shades), "%s: %r has no green and red (%s)" % (q, header, shades))
+
+    def test_weeks_are_labelled_wk_not_w(self):
+        self.assertEqual(self.R["strip"], ["Wk 1", "Wk 2", "Wk 3"])
+
+    def test_the_explanations_stay_short_and_plain(self):
+        banned = ("log5", "shrunk", "competition rank", "basis", "Exp.", "Diff", "Cat luck", "Cat W-L-T", "Opp record")
+        for q, note, sub, tips in self.R["copy"]:
+            self.assertTrue(note, q)
+            self.assertLessEqual(len(note.split()), 60, "%s: the note has %d words" % (q, len(note.split())))
+            self.assertLessEqual(len((sub or "").split()), 16, "%s: the subtitle is too long" % q)
+            for tip in tips:
+                self.assertLessEqual(len(tip.split()), 16, "%s: tooltip %r is too long" % (q, tip))
+            for text in [note, sub or ""] + tips:
+                for word in banned:
+                    self.assertNotIn(word, text, "%s: %r in %r" % (q, word, text[:60]))
 
     def test_matchup_log_has_a_row_per_team_and_week(self):
         self.assertEqual(self.R["mlRows"], 3 * 18)
@@ -244,7 +275,7 @@ class Browser(unittest.TestCase):
         self.assertTrue(self.R["legendFull"] and self.R["meline"] in (True, False))
 
     def test_arrow_keys_change_the_week_except_inside_a_table(self):
-        self.assertEqual((self.R["week0"], self.R["week1"], self.R["week2"]), ("W3", "W2", "W2"))
+        self.assertEqual((self.R["week0"], self.R["week1"], self.R["week2"]), ("Wk 3", "Wk 2", "Wk 2"))
 
     def test_a_saved_image_has_exactly_the_size_of_the_command_line_image(self):
         index = os.path.join(self.site, "index.html")
