@@ -53,7 +53,7 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  for(var b of ['roto','totals','weekly','power','matrix','allplay','real','luck','luckweeks','catluck','matchlog','kings','boom','standings','records','sos','odds','outlook','form','split','performance']){
   p=await load('season=1&board='+b);R.alias[b]=[txt(p.d.querySelector('h1')),txt(p.d.querySelector('#nav .active')),txt(p.d.querySelector('#lensbar button.on')),p.w.location.search];}
  p=await load('season=1&board=real');R.tabs=[].slice.call(p.d.querySelectorAll('#nav button')).map(txt);R.lenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg:first-child button')).map(txt);R.realHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
- p=await load('season=1&board=standings&lens=odds');R.odH1=txt(p.d.querySelector('h1'));R.odHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.odRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.odBars=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i').length;R.odIn=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i.po').length;R.odRange=p.d.querySelectorAll('#snapbar button').length;R.odPct=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td.total'));
+ p=await load('season=1&board=standings&lens=odds');R.odH1=txt(p.d.querySelector('h1'));R.odHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st:not(.acct) thead tr:last-child th')).map(txt);R.odRows=p.d.querySelectorAll('.tscroll .st:not(.acct) tbody tr').length;R.odBars=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i').length;R.odIn=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i.po').length;R.odRange=p.d.querySelectorAll('#snapbar button').length;R.odPct=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td.total'));
 
  p=await load('season=1&board=luck&lens=summary&range=1-3');R.smHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.smRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.smBasisButtons=[].slice.call(p.d.querySelectorAll('#lensbar .seg:nth-child(2) button')).map(txt);R.smRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));
  p=await load('season=1&board=luck&lens=summary&basis=cats&range=1-3');R.smcHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.smcH1=txt(p.d.querySelector('h1'));R.smcRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));
@@ -70,6 +70,8 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  R.colour=[];
  for(var spec of COLOURS){p=await load('season=1&'+spec[0]);var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
   spec[1].forEach(function(hd){var i=hs.indexOf(hd),sh={};if(i>=0)[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.colour.push([spec[0],hd,i,Object.keys(sh)]);});}
+ p=await load('season=1&board=outlook&lens=odds');R.accSummary=txt(p.d.querySelector('.acc summary'));R.accRows=[].slice.call(p.d.querySelectorAll('.acct tbody tr')).map(function(r){return [].slice.call(r.cells).map(txt)});R.movers=txt(p.d.querySelector('.movers'));R.moverChips=p.d.querySelectorAll('.movers .mv').length;R.odSub=txt(p.d.querySelector('.view-subtitle'));R.odNote=txt(p.d.querySelector('details.how p'));
+ p=await load('season=1&board=outlook&lens=odds','early/');R.earlyMovers=p.d.querySelectorAll('.movers').length;R.earlyAcc=p.d.querySelectorAll('.acc,.accline').length;R.earlyRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
  R.spark={};
  for(var q of ['board=luck&lens=summary','board=weekly','board=outlook&lens=odds']){p=await load('season=1&'+q);R.spark[q]=[p.d.querySelectorAll('.tscroll td.trend svg').length,p.d.querySelectorAll('.tscroll td.trend svg polyline').length,p.d.querySelectorAll('.tscroll td.trend svg title').length,p.d.querySelectorAll('.tscroll td.trend svg line.z').length];}
  p=await load('season=1&board=performance&lens=trends&meas=luck&me=7');R.trH1=txt(p.d.querySelector('h1'));R.trLines=p.d.querySelectorAll('svg.trendchart polyline.tl').length;R.trMe=p.d.querySelectorAll('svg.trendchart polyline.tl.me').length;R.trLabels=p.d.querySelectorAll('svg.trendchart text.lb').length;R.trBase=p.d.querySelectorAll('svg.trendchart polyline.bl').length;R.trBaseText=txt(p.d.querySelector('svg.trendchart text.blt'));R.trCap=txt(p.d.querySelector('svg.trendchart text.cap'));R.trMarks=p.d.querySelectorAll('svg.trendchart circle.mk').length;R.trAria=p.d.querySelector('svg.trendchart').getAttribute('aria-label');
@@ -123,6 +125,7 @@ class Browser(unittest.TestCase):
         none = json.loads(json.dumps(main))
         none["odds"] = None
         yr.write_html(none, os.path.join(cls.site, "none"))
+        yr.write_html(golden.build_report(18, 2, regular=10, divisions=True), os.path.join(cls.site, "early"))                  # one finished week: no history, nothing to forecast yet
         yr.write_html(golden.build_report(18, 18, regular=20, divisions=True), os.path.join(cls.site, "long"))      # a full-length season: wide week grids
         old = golden.build_report(18, 4, regular=10, divisions=True)                                  # a report from before the week ranges: no made/attempts in the week views
         for v in old["views"].values():
@@ -244,7 +247,7 @@ class Browser(unittest.TestCase):
 
     def test_the_odds_say_when_the_schedule_is_incomplete_or_missing(self):
         self.assertIn("Preliminary: 3 of 7", self.R["preBanner"])
-        self.assertIn("50,000 simulated seasons", self.R["preSub"])
+        self.assertIn("played from today, 50,000 times", self.R["preSub"])
         self.assertIn("No playoff odds in this report yet", self.R["noneMsg"])
         self.assertEqual(self.R["noneTabs"][3], "Outlook")                                # the tab is still there, with the explanation
 
@@ -314,6 +317,22 @@ class Browser(unittest.TestCase):
         self.assertEqual(self.R["trTblRows"], 18)                                           # the same numbers as a table
         self.assertEqual(self.R["trTblCols"], 1 + 3)                                         # team and three finished weeks
         self.assertRegex(self.R["trTblCell"], r"^\d+\.\d%$")
+
+    def test_the_odds_show_how_reliable_they_have_been_and_who_moved(self):
+        self.assertIn("the favourite won", self.R["accSummary"])
+        self.assertIn("coin flip", self.R["accSummary"])
+        self.assertGreaterEqual(len(self.R["accRows"]), 1)
+        self.assertEqual(sum(int(r[1]) for r in self.R["accRows"]), int(re.search(r"of (\d+) matchups", self.R["accSummary"]).group(1)))     # the bins add up to the games
+        self.assertRegex(self.R["movers"], r"^Since Wk \d+: ")
+        self.assertRegex(self.R["movers"], r"[+\u2212]\d+")
+        self.assertLessEqual(self.R["moverChips"], 6)
+        self.assertIn("played from today", self.R["odSub"])
+        self.assertIn("snapshot, not a forecast", self.R["odNote"])
+        self.assertIn("not modelled", self.R["odNote"])
+
+    def test_with_one_finished_week_there_is_nothing_to_grade_and_nobody_moved(self):
+        self.assertEqual((self.R["earlyMovers"], self.R["earlyAcc"]), (0, 0))
+        self.assertEqual(self.R["earlyRows"], 18)                                              # the table itself is still there
 
     def test_matchup_log_has_a_row_per_team_and_week(self):
         self.assertEqual(self.R["mlRows"], 3 * 18)

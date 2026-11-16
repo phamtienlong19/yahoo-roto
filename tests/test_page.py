@@ -34,6 +34,13 @@ class Page(unittest.TestCase):
                 out = subprocess.run(["node", "--check", path], capture_output=True, text=True, timeout=30)
                 self.assertEqual(out.returncode, 0, "script %d: %s" % (i, out.stderr))
 
+    def test_movers_are_the_biggest_rises_and_falls_of_at_least_the_threshold(self):
+        got = js("RotoPure.movers({1:0.50,2:0.40,3:0.30,4:0.20,5:0.10,6:0.5},{1:0.70,2:0.55,3:0.29,4:0.05,5:0.31,7:0.9},0.02,2)")
+        self.assertEqual([m["id"] for m in got["up"]], ["5", "1"])                                  # +21 and +20; team 2 (+15) would be third
+        self.assertEqual([m["id"] for m in got["down"]], ["4"])                                     # -15; team 3 moved by -1 point only
+        self.assertAlmostEqual(got["up"][0]["delta"], 0.21)
+        self.assertEqual(js("RotoPure.movers({1:0.5},{2:0.9},0.02,3)"), {"up": [], "down": []})        # a team without an earlier snapshot is skipped
+
     def test_sparkline_geometry(self):
         g = js("RotoPure.sparkGeom([1,3,2,null,4],100,20,{})")
         self.assertEqual(len(g["pts"]), 4)                                                      # the missing value is skipped

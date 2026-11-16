@@ -26,6 +26,7 @@ Small trend lines show how luck, form and playoff odds moved week by week. Tap y
 - **Luck:** real wins minus expected wins. **Category luck** is the same in categories won.
 - **Strength of schedule (SOS):** how often your opponents have won, counting every game they played. It is shown for the opponents already faced and for the rest of the season.
 - **Playoff odds:** the rest of the season is played out 50,000 times from each team's strength. Standing is category points, and division winners qualify first if the league says so.
+- **Honest odds:** strength is treated as uncertain, so early odds stay cautious. The page grades itself on the weeks already played and shows who moved since last week. Rosters and injuries are not modelled.
 
 None of this is a Yahoo number.
 
