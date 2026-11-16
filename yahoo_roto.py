@@ -445,6 +445,9 @@ def _cache_get(cache, league, week):
             if d.get("v") not in (2, 3):                                # an older file without Score / matchups: fetch again
                 return None
             meta = {"finalized": d.get("finalized", 0), "checks": d.get("checks", len(CHECK_AGES))}     # a v2 file predates re-checking: leave it alone
+            for k in ("applies", "checked", "pending", "late"):                                         # what Yahoo's stat-corrections page said (see corrections_info)
+                if d.get(k) is not None:
+                    meta[k] = d[k]
             return {"week": week, "matchups": d["matchups"], "_meta": meta,
                     "teams": {int(t): {"name": r["name"], "score": _dec(r["score"]), "cols": {h: _dec(v) for h, v in r["cols"].items()}} for t, r in d["teams"].items()}}
         except (OSError, ValueError, KeyError, TypeError, AttributeError, ZeroDivisionError):
@@ -452,12 +455,79 @@ def _cache_get(cache, league, week):
     return None
 
 
-def _cache_put(cache, league, wk, finalized=None, checks=0):
+def _cache_put(cache, league, wk, finalized=None, checks=0, extra=None):
     p = _cache_path(cache, league, wk["week"])
     if p:
-        write_atomic(p, json.dumps({"v": 3, "finalized": time.time() if finalized is None else finalized, "checks": checks, "matchups": wk.get("matchups", []),
+        write_atomic(p, json.dumps({"v": 3, "finalized": time.time() if finalized is None else finalized, "checks": checks, "matchups": wk.get("matchups", []), **(extra or {}),
                                     "teams": {str(t): {"name": r["name"], "score": _enc(r.get("score")), "cols": {h: _enc(v) for h, v in r["cols"].items()}}
                                               for t, r in wk["teams"].items()}}))
+
+
+SETTLE = 36 * 3600                 # a week is looked at until this long after the day Yahoo applies its corrections, then once more, then left alone
+RECHECK_EVERY = 3 * 3600
+
+
+def parse_stat_corrections(html, now):
+    """Yahoo's Stat Corrections page for one week -> {"rows", "late", "pending", "applies"} or None when the page is not recognised. A row whose date cell is red was received
+    too late to change the scoring; the rest are pending. "applies" is the start (UTC) of the day Yahoo says corrections are applied ("... are applied on Monday, Nov 16.")."""
+    import datetime
+    root = parse_tree(html)
+    tabs = [t for t in root.find_all(lambda e: e.tag == "table") if "Tst-table" in str(t.attrs.get("class", ""))]
+    m = re.search(r"are applied on\s+\w+,\s+([A-Z][a-z]{2})\s+(\d{1,2})", html)
+    if not tabs or not m:
+        return None
+    rows = late = 0
+    for tr in tabs[0].find_all(lambda e: e.tag == "tr"):
+        tds = [c for c in tr.kids if isinstance(c, El) and c.tag == "td"]
+        if not tds:
+            continue
+        rows += 1
+        late += "F-negative" in str(tds[0].attrs.get("class", ""))
+    when = datetime.datetime.fromtimestamp(now, datetime.timezone.utc)
+    try:
+        day = datetime.datetime.strptime("%s %s %d" % (m.group(1), m.group(2), when.year), "%b %d %Y").replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+    if (day - when).days > 180:
+        day = day.replace(year=day.year - 1)
+    elif (when - day).days > 180:
+        day = day.replace(year=day.year + 1)
+    return {"rows": rows, "late": late, "pending": rows - late, "applies": int(day.timestamp())}
+
+
+def corrections_info(fx, base, week, now):
+    """Best effort: what Yahoo's corrections page says about a week, or None (a missing or odd page must never stop the report)."""
+    try:
+        return parse_stat_corrections(fx.get("%s/statcorrections?week=%d" % (base, week)), now)
+    except Exception as e:                                              # noqa: BLE001 - any failure just means no information
+        print("note: could not read the stat corrections of week %d (%s)" % (week, e), file=sys.stderr)
+        return None
+
+
+def recheck_due(meta, now):
+    """Is a finished week due another look? Before Yahoo's apply day (known from its corrections page) every few hours, then once more after it and never again; without
+    that date, the older fixed schedule (1 h, 6 h, 24 h, 48 h after the week finished)."""
+    if meta.get("checks", len(CHECK_AGES)) >= len(CHECK_AGES):
+        return False
+    a = meta.get("applies")
+    if a is None:
+        return now - meta["finalized"] >= CHECK_AGES[meta["checks"]]
+    if now < a + SETTLE:
+        return now - (meta.get("checked") or meta["finalized"]) >= RECHECK_EVERY
+    return True
+
+
+def _meta_extra(meta):
+    return {k: meta[k] for k in ("applies", "checked", "pending", "late") if meta.get(k) is not None}
+
+
+def current_week(fx, base, team_id, league):
+    """The week Yahoo itself shows by default, or None when it cannot be read."""
+    try:
+        return parse_week(fx.get("%s/matchup?date=totals&mid1=%d" % (base, team_id)), league)["week"]
+    except Exception as e:                                              # noqa: BLE001
+        print("note: could not read Yahoo's current week (%s)" % e, file=sys.stderr)
+        return None
 
 
 def collect_week(fx, league, week, team_ids, base):
@@ -527,23 +597,37 @@ def load(league, cache=None, delay=1.5, sport="nba", only_week=None, through=Non
             break
         weeks_data.append(wk)
     t_now = time.time() if now is None else now
-    for i, wk in enumerate(weeks_data[:-1]):                            # final: a later week already has stats
+    st["current_week"] = current_week(fx, base, ids[0], league) if only_week is None and through is None and weeks_data else None
+    last = weeks_data[-1]["week"] if weeks_data else None
+    st["settled"] = bool(weeks_data) and ((st["current_week"] is not None and st["current_week"] > last) or last in stored)      # Yahoo has moved on: the newest week is over
+    for i, wk in enumerate(weeks_data if st["settled"] else weeks_data[:-1]):          # final: a later week already has stats, or Yahoo has turned the page
         if wk["week"] not in stored:
-            _cache_put(cache, league, wk, finalized=t_now)
-        elif cache and only_week is None and (wk.get("_meta") or {}).get("checks", len(CHECK_AGES)) < len(CHECK_AGES):
-            meta = wk["_meta"]
-            if t_now - meta["finalized"] >= CHECK_AGES[meta["checks"]]:      # due for another look: did Yahoo change anything?
-                try:
-                    fresh = collect_week(fx, league, wk["week"], ids, base)
-                except RotoError as e:                                   # the check is best effort: a failed look must not stop the report; it is tried again next pass
-                    print("note: could not re-check week %d (%s)" % (wk["week"], e), file=sys.stderr)
-                    continue
-                if has_data(fresh) and week_changed(wk, fresh):
-                    if fixes is not None:
-                        fixes.append({"week": wk["week"], "old": wk, "new": fresh, "at": t_now})
-                    weeks_data[i] = fresh
-                    wk = fresh
-                _cache_put(cache, league, wk, finalized=meta["finalized"], checks=meta["checks"] + 1)
+            info = corrections_info(fx, base, wk["week"], t_now) if cache and only_week is None else None
+            extra = {"applies": info["applies"], "pending": info["pending"], "late": info["late"]} if info else None
+            _cache_put(cache, league, wk, finalized=t_now, extra=extra)
+            wk["_meta"] = {"finalized": t_now, "checks": 0, **(extra or {})}
+        elif cache and only_week is None and recheck_due(wk.get("_meta") or {}, t_now):
+            meta = dict(wk["_meta"])
+            try:
+                fresh = collect_week(fx, league, wk["week"], ids, base)
+            except RotoError as e:                                   # the check is best effort: a failed look must not stop the report; it is tried again next pass
+                print("note: could not re-check week %d (%s)" % (wk["week"], e), file=sys.stderr)
+                continue
+            if has_data(fresh) and week_changed(wk, fresh):
+                if fixes is not None:
+                    fixes.append({"week": wk["week"], "old": wk, "new": fresh, "at": t_now})
+                weeks_data[i] = fresh
+                wk = fresh
+            info = corrections_info(fx, base, wk["week"], t_now)
+            if info:
+                meta.update(applies=info["applies"], pending=info["pending"], late=info["late"])
+            meta["checked"] = t_now
+            if meta.get("applies") is None or t_now >= meta["applies"] + SETTLE:
+                meta["checks"] += 1                                  # the fixed schedule, or the one look after Yahoo's apply day (which ends the checking)
+                if meta.get("applies") is not None:
+                    meta["checks"] = len(CHECK_AGES)
+            wk["_meta"] = meta
+            _cache_put(cache, league, wk, finalized=meta["finalized"], checks=meta["checks"], extra=_meta_extra(meta))
     if only_week:
         weeks_data = [wk for wk in weeks_data if wk["week"] == only_week]
         if not weeks_data:
@@ -980,13 +1064,13 @@ def cat_points_through(weeks_data, specs, ids):
     return out
 
 
-def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life=None):
+def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life=None, live=True):
     """The playoff chances as they stood after each finished week: [{"week": k, "teams": {team: chance}}]. Week k uses only what was known then (strengths and category points
     from weeks 1..k) and the real pairings of the weeks after it (`pairs_after`: week -> pairs or None). Each week is simulated once and remembered by a fingerprint of its inputs,
     so only a week whose inputs changed (a stat correction, a newly read schedule week) is simulated again."""
     spots = settings.get("playoff_teams")
     divisions = settings.get("divisions") or {}
-    done = len(weeks_data) - 1
+    done = len(weeks_data) - (1 if live else 0)
     pts = cat_points_through(weeks_data[:done], specs, ids)
     p = history_path(cache, league)
     try:
@@ -1081,27 +1165,28 @@ def choose_half_life(weeks_data, specs, ids):
     return None, tested
 
 
-def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, base, cache, now):
+def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, base, cache, now, live=True):
     """The `odds` part of the report, or None when it cannot be made (the league's playoff setup is not on the settings page, or no week has finished). The simulation
     only runs when its inputs changed since the last pass (points so far, team strengths, schedule, playoff setup): the answer is remembered in the cache."""
     spots, start = settings.get("playoff_teams"), settings.get("playoff_start")
-    done = len(weeks_data) - 1
+    done = len(weeks_data) - (1 if live else 0)
     if not spots or not start or done < 1:
         return None
     regular = start - 1
-    live = weeks_data[-1]["week"]
-    left = list(range(live, regular + 1))
+    first_left = weeks_data[-1]["week"] + (0 if live else 1)             # the live week is still to be decided; once Yahoo has turned the page, the next one is
+    left = list(range(first_left, regular + 1))
     if not left:
         return None
-    sched = fetch_schedule(fx, league, base, ids, left[1:], cache, now) if len(left) > 1 else {}
-    remaining = [weeks_data[-1].get("matchups") or None] + [sched.get(w) for w in left[1:]]   # the live week: its pairing is known from its own page
+    ahead = left[1:] if live else left
+    sched = fetch_schedule(fx, league, base, ids, ahead, cache, now) if ahead else {}
+    remaining = ([weeks_data[-1].get("matchups") or None] if live else []) + [sched.get(w) for w in ahead]   # the live week: its pairing is known from its own page
     half_life, tested = choose_half_life(weeks_data[:done], specs, ids)
     st = strengths(weeks_data[:done], specs, ids, half_life)
     if not st:
         return None
     points = {t: float(final_cat_record[t][0]) + final_cat_record[t][2] / 2 for t in ids}
     divisions = settings.get("divisions") or {}
-    inputs = {"v": 5, "sims": SIMS, "draws": STRENGTH_DRAWS, "hl": half_life, "spots": spots, "start": start, "dw": bool(settings.get("div_winners")), "left": left, "points": points,
+    inputs = {"v": 5, "live": live, "sims": SIMS, "draws": STRENGTH_DRAWS, "hl": half_life, "spots": spots, "start": start, "dw": bool(settings.get("div_winners")), "left": left, "points": points,
               "div": sorted(divisions.items()), "sched": [sorted(map(list, wk)) if wk else None for wk in remaining],
               "st": {c: {"sd": round(v["sd"], 9), "lower": v["lower"], "mean": sorted((t, round(x, 9)) for t, x in v["mean"].items())} for c, v in st.items()}}
     fp = hashlib.sha1(json.dumps(inputs, sort_keys=True, default=str).encode("utf-8")).hexdigest()
@@ -1124,8 +1209,8 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
                               "division": divisions.get(t), "points": points[t]} for t, r in res.items()}}
     out["schedule"] = {str(w): [list(p) for p in pairs] for w, pairs in zip(left, remaining) if pairs}      # who plays whom in the weeks still to come (the page rates that schedule)
     pairs_after = {wk["week"]: wk.get("matchups") or None for wk in weeks_data}
-    pairs_after.update({w: sched.get(w) for w in left[1:]})
-    out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life)
+    pairs_after.update({w: sched.get(w) for w in ahead})
+    out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life, live)
     if p:
         write_atomic(p, json.dumps({"fp": fp, "odds": out}, separators=(",", ":")))
     return out
@@ -1230,25 +1315,38 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
     ids = sorted(teams)
     cores = [_core(wk, specs) for wk in weeks_data]
     views = {"season": _season_view(cores, weeks_data, specs, ids)}
-    done = len(weeks_data) - 1                                           # the newest week is still being played: the "final" snapshot leaves it out
-    if done >= 1:
+    live = not st.get("settled")                                           # Yahoo has not turned the page: the newest week is still being played
+    done = len(weeks_data) - (1 if live else 0)                          # the "final" snapshot leaves the live week out
+    if live and done >= 1:
         views["seasonFinal"] = _season_view(cores[:done], weeks_data[:done], specs, ids)
     for wk, c in zip(weeks_data, cores):
         views["w%d" % wk["week"]] = _week_view(c, wk, specs, ids)
-    composites_final = composites(weeks_data[:done], cores[:done], specs, ids, views["seasonFinal"]) if done >= 1 else None
+    comps = composites(weeks_data, cores, specs, ids, views["season"])
+    composites_final = composites(weeks_data[:done], cores[:done], specs, ids, views["seasonFinal"]) if live and done >= 1 else None
     odds = None
     if done >= 1:
         try:
-            final_rec = {t: composites_final["realRecord"][str(t)]["catRecord"] for t in ids}
-            odds = odds_block(st, weeks_data, specs, ids, final_rec, Fetcher(delay=delay, cache=cache), league, base, cache, t_now)
+            final_rec = {t: (composites_final or comps)["realRecord"][str(t)]["catRecord"] for t in ids}
+            odds = odds_block(st, weeks_data, specs, ids, final_rec, Fetcher(delay=delay, cache=cache), league, base, cache, t_now, live)
         except Exception as e:                                           # the odds are an extra: whatever goes wrong must not take the report down
             print("note: playoff odds skipped (%s)" % e, file=sys.stderr)
     champ = resolve_champion(champion if champion is not None else configured_champion(league), names)
     return {"schema": "yahoo-roto-report/2", "schemaVersion": SCHEMA_VERSION, "league": str(league), "champion": champ, "corrections": corrections, "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "inProgressWeek": weeks_data[-1]["week"], "categories": [{"cat": sp["cat"], "lower": sp["lower"], "pct": sp["kind"] == "pct"} for sp in specs],
+            "inProgressWeek": weeks_data[-1]["week"] if live else None, "currentWeek": st.get("current_week"), "settling": None if live else settling(weeks_data[-1], t_now),
+            "categories": [{"cat": sp["cat"], "lower": sp["lower"], "pct": sp["kind"] == "pct"} for sp in specs],
             "skipped": skipped, "teams": {str(t): names[t] for t in names}, "weeks": [wk["week"] for wk in weeks_data], "views": views,
-            "composites": composites(weeks_data, cores, specs, ids, views["season"]),
+            "composites": comps,
             "compositesFinal": composites_final, "odds": odds}
+
+
+def settling(wk, now):
+    """The week Yahoo has closed whose stat corrections may still change it -> {"week", "applies" (ISO date), "pending", "late"}, or None once they are applied (or unknown)."""
+    import datetime
+    meta = wk.get("_meta") or {}
+    a = meta.get("applies")
+    if a is None or now >= a + 24 * 3600:
+        return None
+    return {"week": wk["week"], "applies": datetime.datetime.fromtimestamp(a, datetime.timezone.utc).strftime("%Y-%m-%d"), "pending": meta.get("pending", 0), "late": meta.get("late", 0)}
 
 
 def run(league, week=None, through=None, cache=None, delay=1.5, sport="nba", out=print):
@@ -1375,7 +1473,7 @@ def main(argv=None):
         if a.report:
             doc = report(a.league, a.cache, a.delay, a.sport, champion=a.champion)
             path = write_html(doc, a.report)
-            print("wrote %s and report.json (weeks %s, week %d in progress)" % (path, ", ".join(map(str, doc["weeks"])), doc["inProgressWeek"]))
+            print("wrote %s and report.json (weeks %s, %s)" % (path, ", ".join(map(str, doc["weeks"])), "week %d in progress" % doc["inProgressWeek"] if doc["inProgressWeek"] else "no week in progress"))
             if a.png:
                 for p in write_images(os.path.abspath(path), a.report, a.week, a.season):
                     print("wrote", p)

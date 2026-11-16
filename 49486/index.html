@@ -470,7 +470,7 @@ function snapData(){var r=rng(),f=DOC.weeks[0],ws,k,got;
 function sv(){return snapData().view;}
 function comp(){return snapData().comp;}
 function cur(){return DOC.inProgressWeek;}
-function weekNo(){return S.season?null:(S.week&&DOC.views["w"+S.week]?S.week:cur());}
+function weekNo(){return S.season?null:(S.week&&DOC.views["w"+S.week]?S.week:(cur()||lastWeek()));}
 function lg(){return DOC.leagueName||("Yahoo league "+DOC.league);}
 function span(v){var w=v.weeks;return w.length>1?"Weeks "+w[0]+"-"+w[w.length-1]:"Week "+w[0];}
 
@@ -527,10 +527,14 @@ function loadFeed(){var u=statusSrc();if(!u||Date.now()-FEEDT<REFRESH)return;FEE
  fetch(u+"?t="+Math.floor(Date.now()/60000),{cache:"no-store"}).then(function(r){if(!r.ok)throw 0;return r.json();}).then(function(j){FEED=j;drawStatus();},function(){});}
 function feedWhy(){var f=FEED&&FEED.leagues&&FEED.leagues[LEAGUE||DOC.league];if(!f||!f.fails)return "";
  var since=f.since?new Date(f.since*1000).toLocaleString([], {hour:"2-digit",minute:"2-digit"}):"";return " · ⚠ refresh failing"+(since?" since "+since:"")+" ("+f.fails+" tries"+(f.error?": "+String(f.error).slice(0,120):"")+")";}
+/* A week Yahoo has already closed can still be corrected until the day Yahoo applies stat corrections (DOC.settling, from its Stat Corrections page). */
+function settleNote(w){var g=DOC.settling;if(!g||!(S.season||w===g.week))return "";var d=new Date(g.applies+"T00:00:00Z"),day=isNaN(d.getTime())?"":["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getUTCDay()]+" "+d.getUTCDate()+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()];
+ var n=[g.pending+" pending"].concat(g.late?[g.late+" arrived too late to count"]:[]).join(", ");return wkl(g.week)+" is complete; Yahoo may still correct box scores"+(day?" until "+day:"")+" ("+n+")";}
 function drawStatus(){var el=$("status");el.textContent="";var w=weekNo(),a=asOf(),live=S.season||w===cur();
- var lead=S.season?span(sv())+(rng()[1]>=lastWeek()?" · week "+cur()+" is still being played":rng()[1]===doneWeek()&&hasFinal()?" (finished weeks) · week "+cur()+" not included":""):"Week "+w+(live?" (in progress)":"");
+ var lead=S.season?span(sv())+(rng()[1]>=lastWeek()?(cur()?" · week "+cur()+" is still being played":""):rng()[1]===doneWeek()&&hasFinal()?" (finished weeks) · week "+cur()+" not included":""):"Week "+w+(live?" (in progress)":"");
  el.appendChild(h("b",{text:lead}));
  el.appendChild(document.createTextNode(live?" · As of "+a.text:" · Final"));
+ var sn=settleNote(w);if(sn&&!STATIC)el.appendChild(h("span",{class:"hint",text:" · "+sn}));
  if(!ME&&!STATIC)el.appendChild(h("span",{class:"hint",text:" · "+TAP+" your team to highlight it"}));
  if(live&&a.stale&&!STATIC){var why=feedWhy();el.appendChild(h("span",{class:"stale",text:" · ⚠ data is "+a.min+" min old"+(why?"":", the feed may have stalled")}));if(why)el.appendChild(h("span",{class:"stale",text:why}));loadFeed();}
  var cs=customSource();if(cs&&!STATIC)el.appendChild(h("span",{class:"stale",text:" · ⚠ custom data source: "+cs}));
@@ -578,7 +582,7 @@ function sheet(kind,title,sub,body,note,shade){
  inner=inner.concat(body);
  if(shade)inner.push(h("div",{class:"shadenote",text:shade}));
  if(note&&STATIC)inner.push(h("div",{class:"note",text:note}));
- if(STATIC){var a=asOf();inner.push(h("div",{class:"stamp",text:(S.season?"Season":"Week "+weekNo())+(S.season||weekNo()===cur()?" (in progress) · as of "+a.text:" · final")}));}
+ if(STATIC){var a=asOf();inner.push(h("div",{class:"stamp",text:(S.season?"Season":"Week "+weekNo())+(cur()&&(S.season||weekNo()===cur())?" (in progress) · as of "+a.text:" · final"+(settleNote(weekNo())?" · "+settleNote(weekNo()):""))}));}
  return h("section",{class:"sheet "+kind},[h("div",{class:"in"},inner)]);}
 function scroller(t){return h("div",{class:"tscroll",tabindex:"0",role:"region","aria-label":"Table, scrolls sideways"},[t]);}
 var TIPS={"Rank":"1 = best; tied teams share a place (T-5 = tied for 5th)","Win%":"Wins plus half the ties, divided by games","All-Play":"Your record against every team this week","Categories":"Won-lost-tied against this opponent"};
