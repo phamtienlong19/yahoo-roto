@@ -60,6 +60,8 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p=await load('season=1&board=luck&lens=cat&range=1-3');R.catHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.catBasisButtons=p.d.querySelectorAll('#lensbar .seg:nth-child(2) button').length;
  p=await load('season=1&board=outlook&lens=sos&range=1-3');R.sosH1=txt(p.d.querySelector('h1'));R.sosHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.sosRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.sosRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));
  p=await load('season=1&board=outlook&lens=sos&basis=cats&range=1-3');R.sosCatRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));
+ p=await load('season=1&board=outlook&lens=sos&per=rest');R.sosRestH1=txt(p.d.querySelector('h1'));R.sosRestRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));R.sosRestRange=p.d.querySelectorAll('#snapbar button').length;R.sosPeriods=[].slice.call(p.d.querySelectorAll('#lensbar .seg button')).map(txt);R.sosRestUrl=p.w.location.search;
+ p=await load('season=1&board=outlook&lens=sos&per=rest&basis=cats');R.sosRestCat=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));
  p=await load('season=1&board=outlook&lens=odds','pre/');R.preBanner=txt(p.d.querySelector('.pre'));R.preSub=txt(p.d.querySelector('.view-subtitle'));
  p=await load('season=1&board=outlook&lens=odds','none/');R.noneMsg=txt(p.d.querySelector('.msg'));R.noneTabs=[].slice.call(p.d.querySelectorAll('#nav button')).map(txt);
  p=await load('season=1&board=performance&lens=form','long/');R.fmChips=[].slice.call(p.d.querySelectorAll('#lensbar .seg:nth-child(2) button')).map(txt);R.fmRange=p.d.querySelectorAll('#snapbar button').length;p.d.querySelectorAll('#lensbar .seg:nth-child(2) button')[1].click();R.fmH1=txt(p.d.querySelector('h1'));R.fmUrl=p.w.location.search;R.fmChange=(function(){var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt),i=hs.indexOf('Change (pts)'),sh={};[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){r.cells[i].className.split(' ').forEach(function(k){if(/^(green|red)-/.test(k))sh[k]=1;});});return Object.keys(sh);})();R.fmHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.fmRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
@@ -231,7 +233,14 @@ class Browser(unittest.TestCase):
         self.assertIn("Strength of Schedule", self.R["sosH1"])
         self.assertEqual(self.R["sosHeads"], ["Team", "Opponents' record", "SOS", "Rank"])
         self.assertEqual(self.R["sosRows"], 18)
-        self.assertGreater(sum(int(x) for x in self.R["sosCatRec"].split("-")), sum(int(x) for x in self.R["sosRec"].split("-")))   # category games are nine to a matchup
+        self.assertEqual(sum(int(x) for x in self.R["sosRec"].split("-")), 3 * 3)                  # 3 weeks: 3 opponents x 3 games each (every game of theirs counts)
+        self.assertEqual(sum(int(x) for x in self.R["sosCatRec"].split("-")), 9 * 3 * 3)           # nine categories to a matchup
+        self.assertIn("Rest of season", self.R["sosPeriods"])
+        self.assertIn("Rest of Season", self.R["sosRestH1"])
+        self.assertEqual(sum(int(x) for x in self.R["sosRestRec"].split("-")), 7 * 3)              # seven weeks left x the 3 finished games of each opponent
+        self.assertEqual(sum(int(x) for x in self.R["sosRestCat"].split("-")), 7 * 3 * 9)
+        self.assertEqual(self.R["sosRestRange"], 0)                                                # the week range does not apply to what is still to come
+        self.assertIn("per=rest", self.R["sosRestUrl"])
 
     def test_the_odds_say_when_the_schedule_is_incomplete_or_missing(self):
         self.assertIn("Preliminary: 3 of 7", self.R["preBanner"])

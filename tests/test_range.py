@@ -106,7 +106,7 @@ class RangeParity(unittest.TestCase):
             for c in cats:
                 self.assertAlmostEqual(sum(wk[t][c][0] - wk[t][c][1] for wk in per_week), ref["byCat"][c]["diff"], places=6)
 
-    def test_strength_of_schedule_is_the_opponents_real_record_without_the_games_against_the_team(self):
+    def test_strength_of_schedule_is_the_opponents_real_record(self):
         with open(PAGE, encoding="utf-8") as f:
             src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
         with tempfile.TemporaryDirectory() as d:
@@ -145,9 +145,8 @@ class RangeParity(unittest.TestCase):
                 for wk in weeks:
                     o = games[t][wk][0]
                     for wk2 in weeks:
-                        opp2, r = games[o][wk2]
-                        if opp2 != t:                                                   # the opponent's games against this team are left out
-                            rec = [a + b for a, b in zip(rec, r)]
+                        r = games[o][wk2][1]
+                        rec = [a + b for a, b in zip(rec, r)]                          # all of the opponent's games count
                 res[t] = rec
             return res
         for weeks, basis, res in (([1, 2, 3, 4], "matchups", got[0]), ([2, 3], "matchups", got[1]), ([1, 2, 3, 4], "cats", got[2]), ([2, 3], "cats", got[3])):
@@ -157,9 +156,52 @@ class RangeParity(unittest.TestCase):
                 n = sum(rec)
                 if n:
                     self.assertAlmostEqual(r["pct"], (2 * rec[0] + rec[2]) / (2 * n), places=9)
-                else:                                                                   # a team that met the same single opponent every week: nothing left to average
+                else:
                     self.assertIsNone(r["pct"])
+                self.assertEqual(n, len(weeks) * len(weeks) * (9 if basis == "cats" else 1), "%s %s team %d" % (basis, weeks, t))   # n opponents x n weeks of games each
                 self.assertEqual(r["faced"], len(weeks))
+
+    def test_rest_of_season_strength_of_schedule_rates_the_opponents_still_to_come(self):
+        doc = golden.build_report(18, 4, regular=10)
+        schedule = doc["odds"]["schedule"]
+        self.assertEqual(sorted(map(int, schedule)), [4, 5, 6, 7, 8, 9, 10])                  # from the week in progress to the end of the regular season
+        for pairs in schedule.values():
+            self.assertEqual(sorted(t for p in pairs for t in p), list(range(1, 19)))         # everyone plays once a week
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "doc.json")
+            with open(path, "w") as f:
+                json.dump(doc, f)
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([RotoPure.sosRest(d,[1,2,3],d.odds.schedule,'matchups'),RotoPure.sosRest(d,[1,2,3],d.odds.schedule,'cats')]))" % path
+            out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        got = json.loads(out.stdout)
+        fx, orig = golden.FakeFetcher(golden.build_pages(18, 4, 7, regular=10)), yr.Fetcher
+        yr.Fetcher = lambda **k: fx
+        try:
+            st, teams, wd, _ = yr.load("9", None, 0, "nba")
+        finally:
+            yr.Fetcher = orig
+        headers = list(next(iter(wd[0]["teams"].values()))["cols"])
+        specs, _ = yr.plan(st["categories"] or [h for h in headers if h and not h.endswith("M/A*")], headers)
+        record = {"matchups": {}, "cats": {}}
+        for w in wd[:3]:                                                                   # the finished weeks
+            tot = yr.totals([w], w["teams"])
+            for x, y in w["matchups"]:
+                for a, b in ((x, y), (y, x)):
+                    sc, osc = w["teams"][a]["score"], w["teams"][b]["score"]
+                    record["matchups"].setdefault(a, []).append([1, 0, 0] if sc > osc else [0, 1, 0] if sc < osc else [0, 0, 1])
+                    record["cats"].setdefault(a, []).append(yr.head_to_head(tot[a], tot[b], specs))
+        for basis, res in (("matchups", got[0]), ("cats", got[1])):
+            for t in teams:
+                rec = [0, 0, 0]
+                for pairs in schedule.values():
+                    o = next((p[1] if p[0] == t else p[0] for p in pairs if t in p))
+                    for g in record[basis][o]:
+                        rec = [a + b for a, b in zip(rec, g)]
+                self.assertEqual(res[str(t)]["record"], rec, "%s team %d" % (basis, t))
+                self.assertEqual(res[str(t)]["faced"], 7)                                  # seven weeks left
 
     def test_recent_form_and_the_strong_weak_split_match_a_from_scratch_computation(self):
         with open(PAGE, encoding="utf-8") as f:

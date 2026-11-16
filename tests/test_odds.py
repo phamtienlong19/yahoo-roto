@@ -202,6 +202,7 @@ class InTheReport(unittest.TestCase):
             self.assertEqual(len(o["teams"]), 18)
             self.assertEqual(len(o["teams"]["1"]["dist"]), 18)
             self.assertEqual((o["sims"], o["scheduleWeeks"], o["complete"]), (50000, 7, True))     # the whole schedule is read in the first pass
+            self.assertEqual(sorted(map(int, o["schedule"])), [4, 5, 6, 7, 8, 9, 10])                   # the pairings still to come travel with the report
             self.assertAlmostEqual(o["margin"], 0.44, places=2)
             with open(os.path.join(d, "9-schedule.json")) as f:
                 self.assertEqual(len(json.load(f)), 6)                                              # the pairings of the six future weeks were remembered
