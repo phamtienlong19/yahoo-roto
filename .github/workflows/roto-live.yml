@@ -1,7 +1,8 @@
 name: Roto live
 
 # Lives in the yahoo-roto repo next to yahoo_roto.py, index.html and leagues.json.
-# Keeps a roto report for every league in leagues.json fresh: roughly every 4 minutes on game hours, every 15 otherwise, for ~115 minutes per run, then the
+# Keeps a roto report for every league in leagues.json fresh for ~115 minutes per run. The pace follows the data (cadence.py): about every 3 minutes while Yahoo's totals are
+# changing (games being played), slower the longer nothing moves, hourly in the offseason; the clock is only a ceiling so a tip-off is noticed within 10 minutes. Then the
 # run's first step has already queued its successor (GitHub drops many cron triggers; the cron is only the backstop, every 15 minutes; the concurrency group below keeps at most one run waiting, so extra ticks are harmless). Read-only GETs of Yahoo's public
 # pages (leagues must be publicly viewable; no sign-in). Output goes to an orphan `data` branch (force-pushed, never grows); the Pages site (index.html)
 # reads <repo>/data/<league>/report.json from raw.githubusercontent.com, so the page refreshes without a deploy.
@@ -20,6 +21,7 @@ on:
 permissions:
   contents: write
   actions: write
+  issues: write          # only to open one issue when a league's feed has been failing for a while
 
 concurrency:
   group: roto-live
@@ -44,14 +46,20 @@ jobs:
       - name: Build and publish the reports
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           ONE: ${{ inputs.league }}
         run: |
           set -u
+          case "$ONE" in *[!0-9]*) echo "league must be digits only"; exit 1;; esac
+          STATE=cache/_cache/_state.json
           end=$(( $(date +%s) + 6900 )); mkdir -p cache
+          # fallback only: the old clock rule, used if cadence.py cannot answer
           pick() { h=$((10#$(date -u +%H))); d=$(date -u +%u)
             if [ "$h" -ge 22 ] || [ "$h" -le 7 ] || { [ "$h" -ge 16 ] && [ "$d" -ge 6 ]; }; then echo 240; else echo 900; fi; }
           # the data branch carries the finished weeks' cache between runs
-          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then git fetch -q --depth=1 origin data && git archive FETCH_HEAD _cache 2>/dev/null | tar -x -C cache || true; fi
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            if git fetch -q --depth=1 origin data; then git archive FETCH_HEAD _cache 2>/dev/null | tar -x -C cache || true; fi
+          fi
           # ...and the other leagues' reports: a one-league run (or a league that failed) must not wipe them from the force-pushed branch
           mkdir -p prev
           if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then git archive FETCH_HEAD 2>/dev/null | tar -x -C prev || true; fi
@@ -60,16 +68,29 @@ jobs:
             leagues="$ONE"; [ -n "$leagues" ] || leagues=$(python3 -c "import json;print(' '.join(map(str,json.load(open('leagues.json'))['leagues'])))")
             for id in $leagues; do
               mkdir -p "$out/$id"
-              python3 yahoo_roto.py "$id" --report "$out/$id" --cache cache/_cache || echo "league $id failed (the previous report stays)"
-              rm -f "$out/$id/index.html"        # the Pages site renders report.json; no per-league html on the data branch
+              if python3 yahoo_roto.py "$id" --report "$out/$id" --cache cache/_cache 2>"$out/$id/err.txt"; then
+                cat "$out/$id/err.txt" >&2
+                python3 cadence.py record "$STATE" "$id" "$out/$id/report.json" || echo "could not record league $id"
+              else
+                why=$(tail -c 300 "$out/$id/err.txt"); echo "league $id failed (the previous report stays): $why"
+                python3 cadence.py fail "$STATE" "$id" "$why" || true
+              fi
+              rm -f "$out/$id/index.html" "$out/$id/err.txt"     # the Pages site renders report.json; no per-league html on the data branch
             done
-            mkdir -p "$out/_cache" && cp -R cache/_cache/. "$out/_cache/" 2>/dev/null || true
+            python3 cadence.py status "$STATE" "$out/status.json" || true       # the page reads this to say why a report looks old
+            # one issue per outage, after several failed passes in a row
+            for id in $(python3 cadence.py alerts "$STATE" 5 2>/dev/null); do
+              if [ "$(gh issue list --state open --search "Roto feed failing: league $id in:title" --json number --jq length 2>/dev/null)" = "0" ]; then
+                gh issue create --title "Roto feed failing: league $id" --body "The live workflow could not refresh league $id for several passes in a row. The page keeps showing the last good report. See the status file on the data branch (status.json) and the latest 'Roto live' run log." || true
+              fi
+            done
+            mkdir -p "$out/_cache"; cp -R cache/_cache/. "$out/_cache/" 2>/dev/null || true
             ( cd "$out" && git init -q -b data && git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com" \
               && git add -A && git commit -q -m "roto $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
               && git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data ) || echo "publish failed"
             rm -rf prev; mkdir -p prev; ( cd "$out" && tar --exclude=.git -cf - . ) | tar -xf - -C prev
             [ -n "$ONE" ] && break
-            rest=$(( $(pick) - ($(date +%s) - start) )); [ "$rest" -gt 0 ] || continue
+            rest=$(( $(python3 cadence.py delay "$STATE" 2>/dev/null || pick) - ($(date +%s) - start) )); [ "$rest" -gt 0 ] || continue
             [ $(( $(date +%s) + rest )) -lt "$end" ] || break
             sleep "$rest"
           done
