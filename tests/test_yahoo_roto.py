@@ -137,6 +137,17 @@ class AllPlayAndReport(unittest.TestCase):
         for bad in (None, "", "nobody", "twin", "99"):                               # unknown, empty, ambiguous, id not in the league: no crown, no error
             self.assertIsNone(yr.resolve_champion(bad, names), bad)
 
+    def test_a_name_with_a_tagline_or_punctuation_still_matches(self):
+        names = {1: "M. Jordat | The Silver Seekers", 2: "sup fam | Crashed for Caleb", 3: "Master Chef", 4: "Other"}
+        self.assertEqual(yr.resolve_champion("m jordat", names), 1)                  # punctuation and the tagline are ignored
+        self.assertEqual(yr.resolve_champion("M. JORDAT", names), 1)
+        self.assertEqual(yr.resolve_champion("sup fam", names), 2)
+        self.assertEqual(yr.resolve_champion("master  chef", names), 3)
+        # a whole-name match beats a tagline match; two tagline matches are ambiguous: no crown
+        self.assertEqual(yr.resolve_champion("sup fam", {1: "sup fam", 2: "sup fam | x"}), 1)
+        self.assertIsNone(yr.resolve_champion("sup fam", {1: "sup fam | a", 2: "sup fam | b"}))
+        self.assertIsNone(yr.resolve_champion("the silver seekers", names))           # only the part before the bar counts
+
     def test_the_report_carries_the_champion_team_id(self):
         pages = {"settings": SETTINGS, "lhst=stand": '<table><tr><th>Team</th></tr><tr><td><a href="/nba/9/1">A</a></td></tr><tr><td><a href="/nba/9/2">B</a></td></tr></table>',
                  "week=1": matchup(1, [(1, "A", ["5/10", ".5", "3/4", ".75", "4", "30", "2"]), (2, "B", ["4/10", ".4", "2/4", ".5", "6", "25", "5"])]),
