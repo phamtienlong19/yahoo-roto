@@ -26,6 +26,7 @@ import math
 import os
 import random
 import re
+import statistics
 import sys
 import time
 import urllib.error
@@ -717,8 +718,10 @@ def _wval(cores, week, t, sp):
 
 # ------------------------------------------------------------------ playoff odds
 SIMS = 50000                   # simulated rest-of-seasons: any figure is accurate to within about +-0.4 percentage points (95%)
-PRIOR_WEEKS = 2                # a team's weekly average counts as this many weeks of league-average play too (early in the season a few weeks say little)
-HIST_SIMS = 4000                # the odds after each finished week are simulated with fewer seasons (they only draw a trend line)
+PRIOR_WEEKS = 2                # the older fixed shrinkage: a team's weekly average counts as this many weeks of league-average play too (eb=False)
+STRENGTH_DRAWS = 2000          # simulated seasons come in this many groups; each group draws every team's true strength afresh from what the data can say about it
+BATCHES = 10                   # the groups are split in this many batches to measure how much the percentages wobble from simulation noise
+HIST_SIMS = 8000                # the odds after each finished week are simulated with fewer seasons (they only draw a trend line)
 SCHEDULE_PAGES_PER_PASS = 400  # the whole remaining schedule is read in the first pass (9 pages a week for 18 teams) and remembered; this only caps a runaway
 SCHEDULE_REFRESH = 24 * 3600   # a remembered week is read again after a day (a commissioner can change the schedule) ...
 SCHEDULE_REFRESH_WEEKS = 2     # ... but at most this many weeks per pass, oldest first, so the refresh is a trickle
@@ -774,35 +777,81 @@ def fetch_schedule(fx, league, base, ids, weeks, cache, now, budget=SCHEDULE_PAG
     return {w: sched[w]["pairs"] for w in weeks if w in sched}
 
 
-def strengths(weeks_data, specs, ids):
-    """Per category: {team: weekly mean, shrunk toward the league mean} and the weekly spread (sd, the same for every team). Only finished weeks are passed in."""
+def strengths(weeks_data, specs, ids, half_life=None, eb=True):
+    """Per category: each team's weekly strength and how sure we are of it. Only finished weeks are passed in.
+    {category: {"mean": {team: strength}, "se": {team: standard error of that strength}, "sd": week-to-week spread (the same for every team), "lower": fewer is better}}.
+    With eb (empirical Bayes) a team's average is pulled toward the league average by as much as the league's own spread says is right: how far real team strengths differ is
+    estimated from how far the averages differ beyond what week-to-week noise explains (at least 10% of the observed spread is kept, so a small sample cannot declare every
+    team identical), and the pull is tau2 / (tau2 + sd2 / weeks). `se` is what is left unsure: the simulation draws true strengths from it. Without eb the old fixed pull of PRIOR_WEEKS
+    is used and `se` is zero. `half_life` (weeks) makes recent weeks count more: a week's weight halves every half_life weeks (None = equal weights)."""
     out = {}
+    last = len(weeks_data) - 1
     for sp in specs:
-        per = {t: [] for t in ids}
-        for wk in weeks_data:
+        per = {t: [] for t in ids}                                       # [(value, weight)]
+        for i, wk in enumerate(weeks_data):
             tot = totals([wk], ids)
+            w = 0.5 ** ((last - i) / half_life) if half_life else 1.0
             for t in ids:
                 v = cat_value(tot.get(t, {}), sp)
                 if v is not None:
-                    per[t].append(float(v))
-        allv = [x for xs in per.values() for x in xs]
+                    per[t].append((float(v), w))
+        allv = [x for xs in per.values() for x, _ in xs]
         if not allv:
             continue
         mu = sum(allv) / len(allv)
-        ss = sum((x - sum(xs) / len(xs)) ** 2 for xs in per.values() if xs for x in xs)
+        ss = 0.0
+        for xs in per.values():
+            if xs:
+                m = sum(x for x, _ in xs) / len(xs)
+                ss += sum((x - m) ** 2 for x, _ in xs)
         dof = len(allv) - sum(1 for xs in per.values() if xs)
-        sd = math.sqrt(ss / dof) if dof > 0 else math.sqrt(sum((x - mu) ** 2 for x in allv) / len(allv))
-        sd = sd or 1e-9
-        means = {t: (sum(xs) + PRIOR_WEEKS * mu) / (len(xs) + PRIOR_WEEKS) if xs else mu for t, xs in per.items()}
-        out[sp["cat"]] = {"mean": means, "sd": sd, "lower": sp["lower"]}
+        sd2 = ss / dof if dof > 0 else sum((x - mu) ** 2 for x in allv) / len(allv)
+        sd2 = sd2 or 1e-18
+        avg, neff = {}, {}
+        for t, xs in per.items():
+            if xs:
+                sw = sum(w for _, w in xs)
+                avg[t] = sum(x * w for x, w in xs) / sw
+                neff[t] = sw * sw / sum(w * w for _, w in xs)            # the weeks that count in full (equal weights: just the number of weeks)
+        if not eb:
+            means = {t: (sum(x * w for x, w in xs) + PRIOR_WEEKS * mu) / (sum(w for _, w in xs) + PRIOR_WEEKS) if xs else mu for t, xs in per.items()}
+            out[sp["cat"]] = {"mean": means, "se": {t: 0.0 for t in per}, "sd": math.sqrt(sd2), "lower": sp["lower"]}
+            continue
+        have = list(avg)
+        if len(have) > 1:
+            m_all = sum(avg.values()) / len(have)
+            between = sum((avg[t] - m_all) ** 2 for t in have) / (len(have) - 1)
+        else:
+            between = 0.0
+        if dof <= 0:                                                      # one finished week: the noise cannot be told from real differences; assume a quarter is real
+            sd2, tau2 = between or sd2, 0.25 * between
+        else:
+            noise = sum(sd2 / neff[t] for t in have) / len(have)
+            tau2 = max(between - noise, 0.1 * between)
+        tau2 = tau2 or 1e-18
+        mean, se = {}, {}
+        for t in per:
+            if t in avg:
+                wgt = tau2 / (tau2 + sd2 / neff[t])
+                mean[t] = mu + wgt * (avg[t] - mu)
+                se[t] = math.sqrt(wgt * sd2 / neff[t])
+            else:
+                mean[t], se[t] = mu, math.sqrt(tau2)
+        out[sp["cat"]] = {"mean": mean, "se": se, "sd": math.sqrt(sd2), "lower": sp["lower"]}
     return out
 
 
-def cat_win_distribution(a, b, st):
-    """P(team a wins exactly k of the categories against b), k = 0..ncat: each category is a normal-difference chance, combined exactly."""
+def cat_win_distribution(a, b, st, drawn=None, predictive=False):
+    """P(team a wins exactly k of the categories against b), k = 0..ncat: each category is a normal-difference chance, combined exactly. `drawn` ({category: {team: strength}})
+    replaces the estimated strengths with ones drawn for one simulated season; `predictive` (a forecast made now, strengths still uncertain) widens each category's spread by the
+    two strengths' standard errors instead."""
     dist = [1.0]
-    for c in st.values():
-        z = (c["mean"][a] - c["mean"][b]) / (c["sd"] * math.sqrt(2))
+    for name, c in st.items():
+        m = drawn[name] if drawn else c["mean"]
+        var = 2 * c["sd"] ** 2
+        if predictive:
+            var += c.get("se", {}).get(a, 0.0) ** 2 + c.get("se", {}).get(b, 0.0) ** 2
+        z = (m[a] - m[b]) / math.sqrt(var)
         p = _phi(-z if c["lower"] else z)
         new = [0.0] * (len(dist) + 1)
         for k, q in enumerate(dist):
@@ -812,66 +861,101 @@ def cat_win_distribution(a, b, st):
     return dist
 
 
-def simulate(st, ids, points, remaining, divisions=None, spots=None, div_winners=False, sims=SIMS, seed=1):
-    """Play the rest of the regular season `sims` times. points = {team: category points so far (a won category 1, level 0.5)}, remaining = [[pairs of that week] or None
+def simulate(st, ids, points, remaining, divisions=None, spots=None, div_winners=False, sims=SIMS, seed=1, draws=None, stats=None):
+    """Play the rest of the regular season about `sims` times. points = {team: category points so far (a won category 1, level 0.5)}, remaining = [[pairs of that week] or None
     (pairing unknown: drawn at random)] per week. Standing = total category points (what Yahoo ranks category leagues by), level teams broken at random. Playoff places: with
     div_winners every division's leader plus the best of the rest by overall standing, otherwise the top `spots`.
+    When the strengths in `st` carry a standard error ("se"), the seasons are played in groups (`draws` of them): each group first draws every team's true strength from what
+    the data can say about it (stratified draws, so a few hundred groups cover the range evenly) and keeps it for the whole group, so a team that is truly good or bad stays so
+    across all its remaining weeks. Without "se" every season uses the estimates as they are. `stats`, when given, receives "margin": how many percentage points the playoff
+    chances may be off from simulation noise (95%), measured between batches of groups.
     -> {team: {"playoff", "first", "rank" (expected), "dist": [P(finish 1st), ...]}}"""
     rnd = random.Random(seed)
     rand = rnd.random
     n, ncat = len(ids), len(st)
     ix = {t: i for i, t in enumerate(ids)}
-    cache = {}
-
-    def cdf_of(a, b):                                                   # cumulative chances that team a (index) wins 0..ncat categories against b
-        key = (a, b)
-        if key not in cache:
-            d, acc, c = cat_win_distribution(ids[a], ids[b], st), 0.0, []
-            for q in d:
-                acc += q
-                c.append(acc)
-            cache[key] = c
-        return cache[key]
-    known = [None if wk is None else [(ix[a], ix[b], cdf_of(ix[a], ix[b])) for a, b in wk] for wk in remaining]
+    sampling = any(any(v > 0 for v in c.get("se", {}).values()) for c in st.values())
+    groups = max(1, min(draws or STRENGTH_DRAWS, sims // 10)) if sampling else 1
+    per = -(-sims // groups)
+    total = groups * per
+    z = {}
+    if sampling:
+        inv = statistics.NormalDist().inv_cdf
+        for name, c in st.items():
+            z[name] = {}
+            for t in ids:
+                if c["se"].get(t, 0) > 0:
+                    zs = [inv((k + rand()) / groups) for k in range(groups)]
+                    rnd.shuffle(zs)
+                    z[name][t] = zs
     base_pts = [float(points[t]) for t in ids]
     divs = divisions or {}
     div_of = [divs.get(t) for t in ids]
     use_divs = bool(div_winners and divs and spots)
     playoff, first, dist = [0] * n, [0] * n, [[0] * n for _ in range(n)]
+    batch = [[0] * n for _ in range(BATCHES)]
     bis = bisect.bisect
     order_idx = list(range(n))
-    for _ in range(sims):
-        pts = base_pts[:]
-        for wk in known:
-            if wk is None:
-                perm = order_idx[:]
-                rnd.shuffle(perm)
-                pairs = [(perm[i], perm[i + 1], cdf_of(perm[i], perm[i + 1])) for i in range(0, n - 1, 2)]
-            else:
-                pairs = wk
-            for a, b, c in pairs:
-                k = bis(c, rand() * c[-1])
-                if k > ncat:
-                    k = ncat
-                pts[a] += k
-                pts[b] += ncat - k
-        order = sorted(order_idx, key=lambda t: pts[t] + rand() * 0.01, reverse=True)      # level teams are separated at random (points move in halves)
-        for r, t in enumerate(order):
-            dist[t][r] += 1
-        first[order[0]] += 1
-        if spots:
-            if use_divs:
-                win = {}
-                for t in order:
-                    win.setdefault(div_of[t], t)
-                chosen = list(win.values())[:spots]
-                taken = set(chosen)
-                chosen += [t for t in order if t not in taken][:max(0, spots - len(chosen))]
-            else:
-                chosen = order[:spots]
-            for t in chosen:
-                playoff[t] += 1
-    return {t: {"playoff": playoff[i] / sims, "first": first[i] / sims, "rank": sum((r + 1) * c for r, c in enumerate(dist[i])) / sims, "dist": [c / sims for c in dist[i]]}
+    for g in range(groups):
+        drawn = None
+        if sampling:
+            drawn = {name: {t: c["mean"][t] + (c["se"][t] * z[name][t][g] if t in z[name] else 0.0) for t in ids} for name, c in st.items()}
+        cache = {}
+
+        def cdf_of(a, b):                                               # cumulative chances that team a (index) wins 0..ncat categories against b, for this group's strengths
+            key = (a, b)
+            if key not in cache:
+                d, acc, c = cat_win_distribution(ids[a], ids[b], st, drawn), 0.0, []
+                for q in d:
+                    acc += q
+                    c.append(acc)
+                cache[key] = c
+            return cache[key]
+        known = [None if wk is None else [(ix[a], ix[b], cdf_of(ix[a], ix[b])) for a, b in wk] for wk in remaining]
+        bt = batch[g % BATCHES]
+        for _ in range(per):
+            pts = base_pts[:]
+            for wk in known:
+                if wk is None:
+                    perm = order_idx[:]
+                    rnd.shuffle(perm)
+                    pairs = [(perm[i], perm[i + 1], cdf_of(perm[i], perm[i + 1])) for i in range(0, n - 1, 2)]
+                else:
+                    pairs = wk
+                for a, b, c in pairs:
+                    k = bis(c, rand() * c[-1])
+                    if k > ncat:
+                        k = ncat
+                    pts[a] += k
+                    pts[b] += ncat - k
+            order = sorted(order_idx, key=lambda t: pts[t] + rand() * 0.01, reverse=True)      # level teams are separated at random (points move in halves)
+            for r, t in enumerate(order):
+                dist[t][r] += 1
+            first[order[0]] += 1
+            if spots:
+                if use_divs:
+                    win = {}
+                    for t in order:
+                        win.setdefault(div_of[t], t)
+                    chosen = list(win.values())[:spots]
+                    taken = set(chosen)
+                    chosen += [t for t in order if t not in taken][:max(0, spots - len(chosen))]
+                else:
+                    chosen = order[:spots]
+                for t in chosen:
+                    playoff[t] += 1
+                    bt[t] += 1
+    if stats is not None:
+        used = [i for i in range(BATCHES) if i < groups]
+        size = [per * sum(1 for g in range(groups) if g % BATCHES == i) for i in used]
+        worst = 0.0
+        for t in range(n):
+            f = [batch[i][t] / size[k] for k, i in enumerate(used)]
+            if len(f) > 1:
+                m = sum(f) / len(f)
+                worst = max(worst, math.sqrt(sum((x - m) ** 2 for x in f) / (len(f) - 1) / len(f)))
+        stats["margin"] = round(1.96 * worst * 100, 2) if len(used) > 1 else round(1.96 * math.sqrt(0.25 / total) * 100, 2)
+    return {t: {"playoff": playoff[i] / total, "first": first[i] / total, "rank": sum((r + 1) * c for r, c in enumerate(dist[i])) / total, "dist": [c / total for c in dist[i]]}
             for t, i in ix.items()}
 
 
@@ -896,7 +980,7 @@ def cat_points_through(weeks_data, specs, ids):
     return out
 
 
-def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league):
+def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life=None):
     """The playoff chances as they stood after each finished week: [{"week": k, "teams": {team: chance}}]. Week k uses only what was known then (strengths and category points
     from weeks 1..k) and the real pairings of the weeks after it (`pairs_after`: week -> pairs or None). Each week is simulated once and remembered by a fingerprint of its inputs,
     so only a week whose inputs changed (a stat correction, a newly read schedule week) is simulated again."""
@@ -913,11 +997,11 @@ def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, 
         saved = {}
     out, changed = [], False
     for k in range(1, done + 1):
-        st = strengths(weeks_data[:k], specs, ids)
+        st = strengths(weeks_data[:k], specs, ids, half_life)
         if not st:
             continue
         remaining = [pairs_after.get(w) for w in range(k + 1, regular + 1)]
-        inputs = {"v": 1, "sims": HIST_SIMS, "spots": spots, "dw": bool(settings.get("div_winners")), "points": pts[k - 1], "div": sorted(divisions.items()),
+        inputs = {"v": 3, "sims": HIST_SIMS, "draws": STRENGTH_DRAWS, "hl": half_life, "spots": spots, "dw": bool(settings.get("div_winners")), "points": pts[k - 1], "div": sorted(divisions.items()),
                   "sched": [sorted(map(list, wk)) if wk else None for wk in remaining],
                   "st": {c: {"sd": round(v["sd"], 9), "lower": v["lower"], "mean": sorted((t, round(x, 9)) for t, x in v["mean"].items())} for c, v in st.items()}}
         fp = hashlib.sha1(json.dumps(inputs, sort_keys=True, default=str).encode("utf-8")).hexdigest()
@@ -931,6 +1015,70 @@ def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, 
     if changed and p:
         write_atomic(p, json.dumps(saved, separators=(",", ":")))
     return out
+
+
+def backtest(weeks_data, specs, ids, half_life=None):
+    """How good would the model's matchup forecasts have been? Each finished week from the second on is forecast from the weeks before it (same strengths, same recency setting as
+    the odds) and compared with what happened. -> {"games", "favouriteWon" (share of matchups the favourite won, a tie half), "brier" (mean squared miss; a coin flip scores
+    0.25), "baseline", "bins" (50-60 / 60-70 / 70+ %: forecast against result), "weeks", "spreadRatio" (how much more real category scores swing than the model says; 1 = right)},
+    or None when there is no week to forecast yet. `weeks_data` holds finished weeks only."""
+    rows, per_week, swing_obs, swing_model = [], [], 0.0, 0.0
+    for k in range(1, len(weeks_data)):
+        st = strengths(weeks_data[:k], specs, ids, half_life)
+        if not st:
+            continue
+        wk = weeks_data[k]
+        tot = totals([wk], wk["teams"])
+        ncat = len(st)
+        games = []
+        for a, b in wk.get("matchups", []):
+            res = head_to_head(tot[a], tot[b], specs)
+            if sum(res) == 0:
+                continue
+            dist = cat_win_distribution(a, b, st, predictive=True)
+            half = ncat / 2.0
+            p = sum(q for j, q in enumerate(dist) if j > half) + (0.5 * dist[int(half)] if ncat % 2 == 0 else 0.0)
+            y = 1.0 if res[0] > res[1] else 0.0 if res[0] < res[1] else 0.5
+            mean_k = sum(j * q for j, q in enumerate(dist))
+            swing_model += sum((j - mean_k) ** 2 * q for j, q in enumerate(dist))
+            swing_obs += (res[0] + res[2] / 2.0 - mean_k) ** 2
+            if p < 0.5:                                                  # always the favourite's side
+                p, y = 1 - p, 1 - y
+            games.append((p, y))
+        rows += games
+        if games:
+            per_week.append({"week": wk["week"], "games": len(games), "favouriteWon": round(sum(y for _, y in games) / len(games), 4),
+                             "brier": round(sum((p - y) ** 2 for p, y in games) / len(games), 4)})
+    if not rows:
+        return None
+    bins = []
+    for lo, hi in ((0.5, 0.6), (0.6, 0.7), (0.7, 1.01)):
+        g = [(p, y) for p, y in rows if lo <= p < hi]
+        if g:
+            bins.append({"from": lo, "to": min(hi, 1.0), "games": len(g), "predicted": round(sum(p for p, _ in g) / len(g), 4), "actual": round(sum(y for _, y in g) / len(g), 4)})
+    return {"games": len(rows), "favouriteWon": round(sum(y for _, y in rows) / len(rows), 4), "brier": round(sum((p - y) ** 2 for p, y in rows) / len(rows), 4), "baseline": 0.25,
+            "bins": bins, "weeks": per_week, "spreadRatio": round(swing_obs / swing_model, 3) if swing_model else None}
+
+
+HALF_LIVES = (8, 5, 3)         # weeks; tried against equal weights once enough weeks are in
+MIN_WEEKS_FOR_RECENCY = 6      # fewer finished weeks cannot tell the options apart
+RECENCY_MARGIN = 0.02          # a half-life must beat equal weights by this share of the Brier score to be used
+
+
+def choose_half_life(weeks_data, specs, ids):
+    """Recent weeks count more only if that has actually forecast better: compares equal weights with each half-life by walk-forward Brier score and keeps one only when it wins
+    by RECENCY_MARGIN. -> (half_life or None, {"equal": brier, "8": brier, ...}); before MIN_WEEKS_FOR_RECENCY finished weeks it stays equal weights."""
+    if len(weeks_data) < MIN_WEEKS_FOR_RECENCY:
+        return None, {}
+    tested = {}
+    for hl in (None,) + HALF_LIVES:
+        bt = backtest(weeks_data, specs, ids, hl)
+        if bt:
+            tested["equal" if hl is None else str(hl)] = bt["brier"]
+    best = min((k for k in tested if k != "equal"), key=lambda k: tested[k], default=None)
+    if best is not None and "equal" in tested and tested[best] < tested["equal"] * (1 - RECENCY_MARGIN):
+        return float(best), tested
+    return None, tested
 
 
 def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, base, cache, now):
@@ -947,12 +1095,13 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
         return None
     sched = fetch_schedule(fx, league, base, ids, left[1:], cache, now) if len(left) > 1 else {}
     remaining = [weeks_data[-1].get("matchups") or None] + [sched.get(w) for w in left[1:]]   # the live week: its pairing is known from its own page
-    st = strengths(weeks_data[:done], specs, ids)
+    half_life, tested = choose_half_life(weeks_data[:done], specs, ids)
+    st = strengths(weeks_data[:done], specs, ids, half_life)
     if not st:
         return None
     points = {t: float(final_cat_record[t][0]) + final_cat_record[t][2] / 2 for t in ids}
     divisions = settings.get("divisions") or {}
-    inputs = {"v": 3, "sims": SIMS, "spots": spots, "start": start, "dw": bool(settings.get("div_winners")), "left": left, "points": points,
+    inputs = {"v": 5, "sims": SIMS, "draws": STRENGTH_DRAWS, "hl": half_life, "spots": spots, "start": start, "dw": bool(settings.get("div_winners")), "left": left, "points": points,
               "div": sorted(divisions.items()), "sched": [sorted(map(list, wk)) if wk else None for wk in remaining],
               "st": {c: {"sd": round(v["sd"], 9), "lower": v["lower"], "mean": sorted((t, round(x, 9)) for t, x in v["mean"].items())} for c, v in st.items()}}
     fp = hashlib.sha1(json.dumps(inputs, sort_keys=True, default=str).encode("utf-8")).hexdigest()
@@ -964,18 +1113,19 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
             return saved["odds"]
     except (OSError, ValueError, TypeError, AttributeError):
         pass
-    res = simulate(st, ids, points, remaining, divisions, spots, settings.get("div_winners"), seed=int(league) * 1000 + done)
+    sim_stats = {}
+    res = simulate(st, ids, points, remaining, divisions, spots, settings.get("div_winners"), sims=SIMS, seed=int(league) * 1000 + done, stats=sim_stats)
     r4 = lambda x: round(x, 4)                                          # noqa: E731
     known = sum(1 for x in remaining if x)
     out = {"spots": spots, "regularWeeks": regular, "remaining": left, "scheduleWeeks": known, "complete": known == len(remaining), "sims": SIMS,
-           "margin": round(1.96 * math.sqrt(0.25 / SIMS) * 100, 2),
+           "margin": sim_stats.get("margin"), "model": {"version": 2, "strength": "empirical Bayes, drawn per simulated season", "halfLife": half_life, "tested": tested}, "accuracy": backtest(weeks_data[:done], specs, ids, half_life),
            "divisions": sorted(set(divisions.values())) or None, "divisionWinners": bool(settings.get("div_winners") and divisions),
            "teams": {str(t): {"playoff": r4(r["playoff"]), "first": r4(r["first"]), "rank": r4(r["rank"]), "dist": [r4(x) for x in r["dist"]],
                               "division": divisions.get(t), "points": points[t]} for t, r in res.items()}}
     out["schedule"] = {str(w): [list(p) for p in pairs] for w, pairs in zip(left, remaining) if pairs}      # who plays whom in the weeks still to come (the page rates that schedule)
     pairs_after = {wk["week"]: wk.get("matchups") or None for wk in weeks_data}
     pairs_after.update({w: sched.get(w) for w in left[1:]})
-    out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league)
+    out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life)
     if p:
         write_atomic(p, json.dumps({"fp": fp, "odds": out}, separators=(",", ":")))
     return out
