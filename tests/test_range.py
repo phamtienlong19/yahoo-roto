@@ -206,29 +206,19 @@ class RangeParity(unittest.TestCase):
     def test_recent_form_and_the_strong_weak_split_match_a_from_scratch_computation(self):
         with open(PAGE, encoding="utf-8") as f:
             src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        calls = [("form", [1, 2, 3, 4], 3), ("form", [1, 2, 3], 2), ("form", [1, 2], 5), ("split", [1, 2, 3, 4], None), ("split", [2, 3], None)]
+        got = {}
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "doc.json")
             with open(path, "w") as f:
                 json.dump(self.doc, f)
-            code = src + ("\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([RotoPure.form(d,[1,2,3,4],3),RotoPure.form(d,[1,2,3],2),RotoPure.form(d,[1,2],5),"
-                          "RotoPure.split(d,[1,2,3,4]),RotoPure.split(d,[2,3])]))" % path)
-            out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
-        self.assertEqual(out.returncode, 0, out.stderr)
-        got = json.loads(out.stdout)
-        fx, orig = golden.FakeFetcher(golden.build_pages(18, 4, 7)), yr.Fetcher
-        yr.Fetcher = lambda **k: fx
-        try:
-            st, teams, wd, _ = yr.load("9", None, 0, "nba")
-        finally:
-            yr.Fetcher = orig
-        headers = list(next(iter(wd[0]["teams"].values()))["cols"])
-        specs, _ = yr.plan(st["categories"] or [h for h in headers if h and not h.endswith("M/A*")], headers)
-        weeks = {}
-        for w in wd:
-            tot = yr.totals([w], w["teams"])
-            cells, rec = yr.all_play(tot, specs)
-            res, _ = yr.roto(tot, specs)
-            weeks[w["week"]] = (cells, rec, {t: res[t]["total"] for t in teams})
+            for basis in ("matchups", "cats"):
+                js_calls = ",".join("RotoPure.%s(d,%s%s,%r)" % (fn, json.dumps(ws), "" if n is None else ",%d" % n, basis) for fn, ws, n in calls)
+                code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([%s]))" % (path, js_calls)
+                out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+                self.assertEqual(out.returncode, 0, out.stderr)
+                got[basis] = json.loads(out.stdout)
+        weekly = self.doc["composites"]["weekly"]
 
         def pct(r):
             n = sum(r)
@@ -236,28 +226,33 @@ class RangeParity(unittest.TestCase):
 
         def add(recs):
             return [sum(r[i] for r in recs) for i in range(3)]
-        for ws, n, res in (([1, 2, 3, 4], 3, got[0]), ([1, 2, 3], 2, got[1]), ([1, 2], 5, got[2])):
-            tail = ws[-n:]
-            for t in teams:
-                last, season = add([weeks[w][1][t] for w in tail]), add([weeks[w][1][t] for w in ws])
-                r = res[str(t)]
-                self.assertEqual((r["last"]["record"], r["season"]["record"]), (last, season))
-                self.assertAlmostEqual(r["change"], pct(last) - pct(season), places=9)
-        for ws, res in (([1, 2, 3, 4], got[3]), ([2, 3], got[4])):
-            pc = {t: pct(add([weeks[w][1][t] for w in ws])) for t in teams}
-            pts = {t: sum(weeks[w][2][t] for w in ws) for t in teams}
-            order = sorted(teams, key=lambda t: (-pc[t], -pts[t], t))
-            k = len(order) // 2
-            self.assertEqual(res["order"], order)
-            for t in teams:
-                for key, group in (("strong", order[:k]), ("weak", order[len(order) - k:])):
-                    rec = [0, 0, 0]
-                    for w in ws:
-                        for o in group:
-                            if o != t:
-                                c = weeks[w][0][t][o]
-                                rec[0 if c[0] > c[1] else 1 if c[0] < c[1] else 2] += 1
-                    self.assertEqual(res[str(t)][key]["record"], rec, "%s %s %s" % (ws, t, key))
+
+        def game(t, w, basis):
+            v = weekly[str(t)][str(w)]
+            return v["catRecord"] if basis == "cats" else {"W": [1, 0, 0], "L": [0, 1, 0], "T": [0, 0, 1]}[v["result"]]
+        teams = [int(t) for t in self.doc["teams"]]
+        for basis in ("matchups", "cats"):
+            for (fn, ws, n), res in zip(calls[:3], got[basis][:3]):
+                tail = ws[-n:]
+                for t in teams:
+                    last, season = add([game(t, w, basis) for w in tail]), add([game(t, w, basis) for w in ws])
+                    r = res[str(t)]
+                    self.assertEqual((r["last"]["record"], r["season"]["record"]), (last, season), (basis, t))
+                    self.assertAlmostEqual(r["change"], pct(last) - pct(season), places=9)
+                    self.assertAlmostEqual(r["earned"], pct(add([weekly[str(t)][str(w)]["allPlay"] for w in tail])), places=9)    # the all-play Win% of the same weeks
+            for (fn, ws, n), res in zip(calls[3:], got[basis][3:]):
+                pc = {t: pct(add([weekly[str(t)][str(w)]["allPlay"] for w in ws])) for t in teams}
+                pts = {t: sum(weekly[str(t)][str(w)]["total"] for w in ws) for t in teams}
+                order = sorted(teams, key=lambda t: (-pc[t], -pts[t], t))
+                k = len(order) // 2
+                self.assertEqual(res["order"], order)
+                for t in teams:
+                    for key, group in (("strong", order[:k]), ("weak", order[len(order) - k:])):
+                        played = [w for w in ws if weekly[str(t)][str(w)]["opp"] in group and weekly[str(t)][str(w)]["opp"] != t]       # the real matchups against that half
+                        r = res[str(t)][key]
+                        self.assertEqual(r["record"], add([game(t, w, basis) for w in played]), "%s %s %s %s" % (basis, ws, t, key))
+                        self.assertEqual(r["games"], len(played))
+        self.assertTrue(any(r["strong"]["games"] + r["weak"]["games"] > 0 for k, r in got["matchups"][3].items() if k != "order"))     # the golden league has real games to count
 
     def test_a_report_without_made_attempts_is_refused_not_misread(self):
         old = json.loads(json.dumps(self.doc))

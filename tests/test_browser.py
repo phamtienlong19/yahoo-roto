@@ -22,10 +22,10 @@ import yahoo_roto as yr  # noqa: E402
 HARNESS = r"""<!doctype html><meta charset=utf-8><body><pre id=out>pending</pre><script>
 var R={},errors=[];
 var COLOURS=[['board=real',['Luck','Places vs expected']],['board=luck&lens=summary&basis=cats',['Category luck','Places vs expected']],['board=luck&lens=week',['Wk 2','Luck']],['board=luck&lens=cat',['PTS','TO','Luck']],
- ['board=outlook&lens=sos',['SOS','Rank']],['board=outlook&lens=odds',['Playoffs']],['board=weekly',['Points','Rank']],['board=allplay',['Win%','Rank']],['board=power',['Season Roto','Weekly Roto','Season All-Play','Real Record','Power']],['board=roto',['Total']],
- ['board=matchlog',['Luck']],['board=performance&lens=form',['Last 3']],['board=performance&lens=split',['Strong Win%','Weak Win%']]];
-var PLAIN=[['board=real',['Record','Wins','Expected wins','Rank','Expected rank']],['board=luck&lens=cat',['Won','Expected','Rank']],['board=outlook&lens=sos',["Opponents' record"]],['board=outlook&lens=odds',['Top seed','Projected rank','Odds trend']],
- ['board=weekly',['Per week']],['board=allplay',['W-L-T']],['board=matchlog',['All-play Win%',"Opponent's Win%"]],['board=roto',['Rank']],['board=performance&lens=form',['Season']],['board=performance&lens=split',['Vs strong','Vs weak']]];
+ ['board=outlook&lens=sos',['SOS','Rank']],['board=outlook&lens=odds',['Playoffs']],['board=weekly',['Wk 2','Rank']],['board=allplay',['Win%','Rank']],['board=power',['Season Roto','Weekly Roto','Season All-Play','Real Record','Power']],['board=roto',['Total']],
+ ['board=matchlog',['Luck']],['board=performance&lens=form',['Win%']],];
+var PLAIN=[['board=real',['Record','Wins','Expected wins','Rank','Expected rank']],['board=luck&lens=cat',['Won','Expected','Rank']],['board=outlook&lens=sos',["Opponents' record"]],['board=outlook&lens=odds',['Top seed','Projected rank','Since Wk 2']],
+ ['board=weekly',['Points','Per week']],['board=allplay',['W-L-T']],['board=matchlog',['All-play Win%',"Opponent's Win%"]],['board=roto',['Rank']],['board=performance&lens=form',['Last 3','Season Win%','Stats said']],['board=performance&lens=split',['Vs strong','Vs weak']]];
 var COPYQ=['season=1&board=roto','season=1&board=totals','season=1&board=matrix','season=1&board=weekly','season=1&board=allplay','season=1&board=real','season=1&board=luck&lens=summary&basis=cats','season=1&board=luck&lens=week','season=1&board=luck&lens=week&basis=cats','season=1&board=luck&lens=cat',
  'season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=odds','season=1&board=kings','season=1&board=performance&lens=form','season=1&board=performance&lens=split','season=1&board=performance&lens=trends','season=1&board=power','week=3&view=roto','week=3&view=stats','week=3&view=allplay','week=3&view=matchups'];
 var FITS=['board=roto','board=totals','board=matrix','board=weekly','board=allplay','board=real','board=luck&lens=summary&basis=cats','board=luck&lens=week','board=luck&lens=week&basis=cats','board=luck&lens=cat','board=outlook&lens=sos','board=outlook&lens=sos&basis=cats','board=outlook&lens=odds','board=kings','board=performance&lens=form','board=performance&lens=split','board=performance&lens=trends','board=power'];
@@ -71,12 +71,13 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  R.colour=[];
  for(var spec of COLOURS){p=await load('season=1&'+spec[0]);var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
   spec[1].forEach(function(hd){var i=hs.indexOf(hd),sh={};if(i>=0)[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.colour.push([spec[0],hd,i,Object.keys(sh)]);});}
+ p=await load('season=1&board=performance&lens=split','long/');(function(){var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);['Strong Win%','Weak Win%'].forEach(function(hd){var i=hs.indexOf(hd),sh={};[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.colour.push(['board=performance&lens=split (long season)',hd,i,Object.keys(sh)]);});})();
  p=await load('season=1&board=outlook&lens=odds');R.accSummary=txt(p.d.querySelector('.acc summary'));R.accRows=[].slice.call(p.d.querySelectorAll('.acct tbody tr')).map(function(r){return [].slice.call(r.cells).map(txt)});R.movers=txt(p.d.querySelector('.movers'));R.moverChips=p.d.querySelectorAll('.movers .mv').length;R.odSub=txt(p.d.querySelector('.view-subtitle'));R.odNote=txt(p.d.querySelector('details.how p'));
  for(var q of ['board=roto','board=luck&lens=summary','board=outlook&lens=odds','board=outlook&lens=sos&per=rest','board=performance&lens=form','board=performance&lens=trends']){p=await load('season=1&'+q,'settled/');R.settledStatus=txt(p.d.querySelector('#status'));R.settledRows=(R.settledRows||[]).concat([p.d.querySelectorAll('.tscroll .st tbody tr').length]);}
  p=await load('week=4&view=roto','settled/');R.settledWeekStatus=txt(p.d.querySelector('#status'));R.settledWeekH1=txt(p.d.querySelector('h1'));
  p=await load('season=1&board=outlook&lens=odds','early/');R.earlyMovers=p.d.querySelectorAll('.movers').length;R.earlyAcc=p.d.querySelectorAll('.acc,.accline').length;R.earlyRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
- R.spark={};
- for(var q of ['board=luck&lens=summary','board=weekly','board=outlook&lens=odds']){p=await load('season=1&'+q);R.spark[q]=[p.d.querySelectorAll('.tscroll td.trend svg').length,p.d.querySelectorAll('.tscroll td.trend svg polyline').length,p.d.querySelectorAll('.tscroll td.trend svg title').length,p.d.querySelectorAll('.tscroll td.trend svg line.z').length];}
+ for(var q of ['board=weekly','board=luck&lens=summary','board=outlook&lens=odds','board=performance&lens=form']){p=await load('season=1&'+q);R.noSpark=R.noSpark||{};R.noSpark[q]=p.d.querySelectorAll('.tscroll svg').length;}
+ p=await load('season=1&board=weekly');R.wkHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.wkShades=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody td')).map(function(c){return (c.className.match(/(green|red)-(strong|soft)/)||[''])[0];});
  p=await load('season=1&board=performance&lens=trends&meas=luck&me=7');R.trH1=txt(p.d.querySelector('h1'));R.trLines=p.d.querySelectorAll('svg.trendchart polyline.tl').length;R.trMe=p.d.querySelectorAll('svg.trendchart polyline.tl.me').length;R.trLabels=p.d.querySelectorAll('svg.trendchart text.lb').length;R.trBase=p.d.querySelectorAll('svg.trendchart polyline.bl').length;R.trBaseText=txt(p.d.querySelector('svg.trendchart text.blt'));R.trCap=txt(p.d.querySelector('svg.trendchart text.cap'));R.trMarks=p.d.querySelectorAll('svg.trendchart circle.mk').length;R.trAria=p.d.querySelector('svg.trendchart').getAttribute('aria-label');
  var ms=p.d.querySelector('#lensbar select[aria-label="Measure"]');ms.value='rank';ms.dispatchEvent(new p.w.Event('change'));R.trH1b=txt(p.d.querySelector('h1'));R.trUrl=p.w.location.search;
  p=await load('season=1&board=performance&lens=trends&meas=win&tbl=1');R.trTblRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.trTblCols=p.d.querySelectorAll('.tscroll .st thead tr:last-child th').length;R.trTblCell=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:last-child'));
@@ -224,8 +225,8 @@ class Browser(unittest.TestCase):
 
     def test_the_summary_follows_the_matchups_or_categories_switch(self):
         self.assertEqual(self.R["smBasisButtons"], ["Matchups", "Categories"])
-        self.assertEqual(self.R["smHeads"], ["Team", "Record", "Wins", "Expected wins", "Luck", "Luck trend", "Rank", "Expected rank", "Places vs expected"])
-        self.assertEqual(self.R["smcHeads"], ["Team", "Category record", "Categories won", "Expected categories", "Category luck", "Luck trend", "Rank", "Expected rank", "Places vs expected"])
+        self.assertEqual(self.R["smHeads"], ["Team", "Record", "Wins", "Expected wins", "Luck", "Rank", "Expected rank", "Places vs expected"])
+        self.assertEqual(self.R["smcHeads"], ["Team", "Category record", "Categories won", "Expected categories", "Category luck", "Rank", "Expected rank", "Places vs expected"])
         self.assertIn("Category Record & Luck", self.R["smcH1"])
         self.assertEqual(self.R["smRows"], 18)
         self.assertEqual(len(self.R["smRec"].split("-")), 3)                              # a matchup record: W-L-T over a few matchups
@@ -233,7 +234,7 @@ class Browser(unittest.TestCase):
 
     def test_playoff_odds_view(self):
         self.assertIn("Playoff Odds", self.R["odH1"])
-        self.assertEqual(self.R["odHeads"], ["Team", "Div", "Playoffs", "Top seed", "Projected rank", "Odds trend", "Finishing place"])
+        self.assertEqual(self.R["odHeads"], ["Team", "Div", "Playoffs", "Top seed", "Projected rank", "Since Wk 2", "Finishing place"])
         self.assertEqual((self.R["odRows"], self.R["odBars"], self.R["odIn"]), (18, 18, 6))        # a bar per place, the six playoff places in green
         self.assertEqual(self.R["odRange"], 0)                                                       # the week range does not apply to it
         self.assertRegex(self.R["odPct"], r"^(>99|<1|\d+)%$")
@@ -293,7 +294,7 @@ class Browser(unittest.TestCase):
         self.assertEqual(self.R["fmRange"], 0)                                               # the week range does not apply
         self.assertIn("Last 5", self.R["fmH1"])
         self.assertIn("win=5", self.R["fmUrl"])
-        self.assertEqual(self.R["fmHeads"], ["Team", "Last 5", "Season", "Change (pts)", "By week"])
+        self.assertEqual(self.R["fmHeads"], ["Team", "Last 5", "Win%", "Season Win%", "Change (pts)", "Stats said", "Week by week"])
         self.assertEqual(self.R["fmRows"], 18)
         self.assertEqual(self.R["fmShortChips"], ["Last 3"])                                 # three finished weeks: only the 3-week window fits
 
@@ -305,9 +306,13 @@ class Browser(unittest.TestCase):
         self.assertEqual(self.R["spRows"], 18)
         self.assertIn("Weeks 2-3", self.R["spH1"])                                           # follows the week range
 
-    def test_small_trend_lines_sit_in_four_tables_one_per_team(self):
-        for q, (svgs, lines, titles, baselines) in self.R["spark"].items():
-            self.assertEqual((svgs, lines, titles, baselines), (18, 18, 18, 18), q)               # every line has a dashed baseline to compare against
+    def test_no_table_carries_a_small_line_chart(self):
+        for q in ("board=weekly", "board=luck&lens=summary", "board=outlook&lens=odds", "board=performance&lens=form"):
+            self.assertEqual(self.R["noSpark"][q], 0, q)                                            # numbers and shades say it; the one chart is the Trends view
+
+    def test_weekly_roto_has_a_shaded_column_for_every_week(self):
+        self.assertEqual(self.R["wkHeads"], ["Team"] + ["Wk %d" % k for k in range(1, 4)] + ["Points", "Per week", "Rank"])
+        self.assertTrue(any(c.startswith("green") for c in self.R["wkShades"]) and any(c.startswith("red") for c in self.R["wkShades"]), self.R["wkShades"])
 
     def test_the_trends_chart_has_a_line_per_team_and_highlights_yours(self):
         self.assertIn("Cumulative luck", self.R["trH1"])
