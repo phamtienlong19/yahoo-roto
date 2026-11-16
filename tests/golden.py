@@ -27,8 +27,9 @@ class FakeFetcher(yr.Fetcher):
         raise yr.RotoError("unexpected " + url)
 
 
-def build_pages(n=18, weeks=4, seed=7):
-    """Pages for a league with stats in `weeks` weeks (the last one counts as in progress) and one empty week after it."""
+def build_pages(n=18, weeks=4, seed=7, regular=None, divisions=False, spots=6):
+    """Pages for a league with stats in `weeks` weeks (the last one counts as in progress) and one empty week after it. With `regular` the settings page also
+    states a playoff (`spots` teams from week regular+1) and the empty weeks run up to the end of the regular season; `divisions` splits the standings page in East / West."""
     rnd = random.Random(seed)
     strength = [rnd.gauss(0, 1) for _ in range(n)]
     names = (NAMES * 3)[:n]
@@ -42,14 +43,21 @@ def build_pages(n=18, weeks=4, seed=7):
         return ["%d/%d" % (fgm, fga), "%.3f" % (fgm / fga), "%d/%d" % (ftm, fta), "%.3f" % (ftm / fta), str(int(rnd.gauss(40 + 4 * s, 8))), str(int(rnd.gauss(450 + 30 * s, 25))),
                 str(int(rnd.gauss(110 + 10 * s, 12))), str(int(rnd.gauss(65 + 5 * s, 9))), str(int(rnd.gauss(18 + 2 * s, 4))), str(int(rnd.gauss(14 + 2 * s, 4))), str(int(rnd.gauss(35, 6)))]
 
+    last = max(weeks + 1, (regular or 0) + 3)
+
     def page(week, pair, data):
-        opts = "".join('<option value="x?module=matchup&week=%d"%s>%d</option>' % (w, " selected" if w == week else "", w) for w in range(1, weeks + 2))
+        opts = "".join('<option value="x?module=matchup&week=%d"%s>%d</option>' % (w, " selected" if w == week else "", w) for w in range(1, last + 1))
         rows = "".join('<tr><td><a href="/nba/9/%d">%s</a></td>%s<td>%s</td></tr>' % (t + 1, names[t], "".join("<td>%s</td>" % x for x in data[t]["v"]), data[t]["sc"]) for t in pair)
         return ("<select>%s</select><table><tr><th>Team</th><th>FGM/A*</th><th>FG%%</th><th>FTM/A*</th><th>FT%%</th><th>3PTM</th><th>PTS</th><th>REB</th><th>AST</th><th>ST</th>"
                 "<th>BLK</th><th>TO</th><th></th></tr>%s</table>" % (opts, rows))
 
-    pages = {"settings": SETTINGS, "lhst=stand": "<table><tr><th>Team</th></tr>" + "".join('<tr><td><a href="/nba/9/%d">%s</a></td></tr>' % (i + 1, names[i]) for i in range(n)) + "</table>"}
-    for w in range(1, weeks + 2):
+    settings = SETTINGS if not regular else SETTINGS.replace("Stat Modifiers", "Playoffs: %d teams - Week %d, %d and %d Playoff Seeding Options: Division winners advance but seeded by overall standings Lock Benched Players: No Stat Modifiers" % (spots, regular + 1, regular + 2, regular + 3))
+    if divisions:
+        rows = "".join(('<tr><td><h4>%s</h4></td></tr>' % d if i in (0, n // 2) else "") + '<tr><td><a href="/nba/9/%d">%s</a></td></tr>' % (i + 1, names[i]) for i, d in ((i, "East" if i < n // 2 else "West") for i in range(n)))
+    else:
+        rows = "".join('<tr><td><a href="/nba/9/%d">%s</a></td></tr>' % (i + 1, names[i]) for i in range(n))
+    pages = {"settings": settings, "lhst=stand": "<table><tr><th>Team</th></tr>" + rows + "</table>"}
+    for w in range(1, last + 1):
         order = list(range(n))
         random.Random(w).shuffle(order)
         pairs = [order[i:i + 2] for i in range(0, n, 2)]
@@ -64,10 +72,10 @@ def build_pages(n=18, weeks=4, seed=7):
     return pages
 
 
-def build_report(n=18, weeks=4, seed=7, champion="sup fam"):
-    fx, orig = FakeFetcher(build_pages(n, weeks, seed)), yr.Fetcher
+def build_report(n=18, weeks=4, seed=7, champion="sup fam", cache=None, **kw):
+    fx, orig = FakeFetcher(build_pages(n, weeks, seed, **kw)), yr.Fetcher
     yr.Fetcher = lambda **k: fx
     try:
-        return yr.report("9", champion=champion)
+        return yr.report("9", champion=champion, cache=cache)
     finally:
         yr.Fetcher = orig

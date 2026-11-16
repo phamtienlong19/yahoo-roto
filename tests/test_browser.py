@@ -45,6 +45,8 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  for(var b of ['roto','totals','weekly','power','matrix','allplay','real','luck','luckweeks','catluck','matchlog','kings','boom','standings','records']){
   p=await load('season=1&board='+b);R.alias[b]=[txt(p.d.querySelector('h1')),txt(p.d.querySelector('#nav .active')),txt(p.d.querySelector('#lensbar button.on')),p.w.location.search];}
  p=await load('season=1&board=real');R.tabs=[].slice.call(p.d.querySelectorAll('#nav button')).map(txt);R.lenses=[].slice.call(p.d.querySelectorAll('#lensbar button')).map(txt);R.realHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
+ p=await load('season=1&board=standings&lens=odds');R.odH1=txt(p.d.querySelector('h1'));R.odHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.odRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.odBars=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i').length;R.odIn=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i.po').length;R.odRange=p.d.querySelectorAll('#snapbar button').length;R.odPct=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td.total'));
+
  p=await load('season=1&board=luck&lens=expected&range=1-3');R.exH1=txt(p.d.querySelector('h1'));R.exHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.exRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
  p=await load('season=1&board=luck&lens=sos&range=1-3');R.sosH1=txt(p.d.querySelector('h1'));R.sosHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.sosRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
  p=await load('season=1&board=matchlog&range=1-3');R.mlRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.mlH1=txt(p.d.querySelector('h1'));
@@ -78,8 +80,8 @@ class Browser(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.site = os.path.join(cls.tmp.name, "site")
-        yr.write_html(golden.build_report(18, 4), cls.site)
-        old = golden.build_report(18, 4)                                  # a report from before the week ranges: no made/attempts in the week views
+        yr.write_html(golden.build_report(18, 4, regular=10, divisions=True), cls.site)
+        old = golden.build_report(18, 4, regular=10, divisions=True)                                  # a report from before the week ranges: no made/attempts in the week views
         for v in old["views"].values():
             for t in v["teams"].values():
                 t.pop("raw", None)
@@ -164,6 +166,13 @@ class Browser(unittest.TestCase):
         self.assertEqual(self.R["tabs"], ["Standings", "All-Play", "Luck", "Records"])
         self.assertEqual(self.R["lenses"], ["Summary", "Expected standings", "Schedule", "By week", "By week \u00b7 categories", "By category", "Matchup Log"])
         self.assertIn("Cat luck", self.R["realHeads"])                               # real record and luck, with category luck folded in
+
+    def test_playoff_odds_view(self):
+        self.assertIn("Playoff Odds", self.R["odH1"])
+        self.assertEqual(self.R["odHeads"], ["Team", "Div", "Playoffs", "Top seed", "Proj. rank", "Cat pts", "Finishing place"])
+        self.assertEqual((self.R["odRows"], self.R["odBars"], self.R["odIn"]), (18, 18, 6))        # a bar per place, the six playoff places in green
+        self.assertEqual(self.R["odRange"], 0)                                                       # the week range does not apply to it
+        self.assertRegex(self.R["odPct"], r"^(>99|<1|\d+)%$")
 
     def test_expected_standings_and_strength_of_schedule_views(self):
         self.assertIn("Expected Standings", self.R["exH1"])
