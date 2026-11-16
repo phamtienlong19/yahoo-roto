@@ -952,7 +952,7 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
         return None
     points = {t: float(final_cat_record[t][0]) + final_cat_record[t][2] / 2 for t in ids}
     divisions = settings.get("divisions") or {}
-    inputs = {"v": 2, "sims": SIMS, "spots": spots, "start": start, "dw": bool(settings.get("div_winners")), "left": left, "points": points,
+    inputs = {"v": 3, "sims": SIMS, "spots": spots, "start": start, "dw": bool(settings.get("div_winners")), "left": left, "points": points,
               "div": sorted(divisions.items()), "sched": [sorted(map(list, wk)) if wk else None for wk in remaining],
               "st": {c: {"sd": round(v["sd"], 9), "lower": v["lower"], "mean": sorted((t, round(x, 9)) for t, x in v["mean"].items())} for c, v in st.items()}}
     fp = hashlib.sha1(json.dumps(inputs, sort_keys=True, default=str).encode("utf-8")).hexdigest()
@@ -972,6 +972,7 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
            "divisions": sorted(set(divisions.values())) or None, "divisionWinners": bool(settings.get("div_winners") and divisions),
            "teams": {str(t): {"playoff": r4(r["playoff"]), "first": r4(r["first"]), "rank": r4(r["rank"]), "dist": [r4(x) for x in r["dist"]],
                               "division": divisions.get(t), "points": points[t]} for t, r in res.items()}}
+    out["schedule"] = {str(w): [list(p) for p in pairs] for w, pairs in zip(left, remaining) if pairs}      # who plays whom in the weeks still to come (the page rates that schedule)
     pairs_after = {wk["week"]: wk.get("matchups") or None for wk in weeks_data}
     pairs_after.update({w: sched.get(w) for w in left[1:]})
     out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league)

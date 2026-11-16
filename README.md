@@ -24,7 +24,7 @@ Small trend lines show how luck, form and playoff odds moved week by week. Tap y
 - **All-play:** each week, how you would have done against every team. A game is won by taking more categories.
 - **Expected wins:** each week's all-play Win% added up. It is how many matchups your stats should have won.
 - **Luck:** real wins minus expected wins. **Category luck** is the same in categories won.
-- **Strength of schedule (SOS):** how often your opponents won, leaving out their games against you.
+- **Strength of schedule (SOS):** how often your opponents have won, counting every game they played. It is shown for the opponents already faced and for the rest of the season.
 - **Playoff odds:** the rest of the season is played out 50,000 times from each team's strength. Standing is category points, and division winners qualify first if the league says so.
 
 None of this is a Yahoo number.
