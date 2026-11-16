@@ -106,6 +106,58 @@ class RangeParity(unittest.TestCase):
             for c in cats:
                 self.assertAlmostEqual(sum(wk[t][c][0] - wk[t][c][1] for wk in per_week), ref["byCat"][c]["diff"], places=6)
 
+    def test_strength_of_schedule_matches_a_from_scratch_computation_and_splits_luck(self):
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "doc.json")
+            with open(path, "w") as f:
+                json.dump(self.doc, f)
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([RotoPure.schedule(d,[1,2,3,4]),RotoPure.schedule(d,[2,3])]))" % path
+            out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        got = json.loads(out.stdout)
+        fx, orig = golden.FakeFetcher(golden.build_pages(18, 4, 7)), yr.Fetcher
+        yr.Fetcher = lambda **k: fx
+        try:
+            st, teams, wd, _ = yr.load("9", None, 0, "nba")
+        finally:
+            yr.Fetcher = orig
+        headers = list(next(iter(wd[0]["teams"].values()))["cols"])
+        specs, _ = yr.plan(st["categories"] or [h for h in headers if h and not h.endswith("M/A*")], headers)
+
+        def ref(weeks):
+            acc = {t: [0, 0.0, 0.0, 0.0, 0.0] for t in teams}                    # games, sum b, sum a, sum p, real
+            for w in wd:
+                if w["week"] not in weeks:
+                    continue
+                tot = yr.totals([w], w["teams"])
+                cells, rec = yr.all_play(tot, specs)
+                for x, y in w["matchups"]:
+                    for t, o in ((x, y), (y, x)):
+                        c = cells[o][t]
+                        ro = list(rec[o])
+                        ro[0 if c[0] > c[1] else 1 if c[0] < c[1] else 2] -= 1
+                        b = (2 * ro[0] + ro[2]) / (2 * sum(ro))
+                        a = (2 * rec[t][0] + rec[t][2]) / (2 * sum(rec[t]))
+                        dn = a * (1 - b) + (1 - a) * b
+                        sc, osc = w["teams"][t]["score"], w["teams"][o]["score"]
+                        acc[t][0] += 1
+                        acc[t][1] += b
+                        acc[t][2] += a
+                        acc[t][3] += a * (1 - b) / dn if dn else a
+                        acc[t][4] += 1 if sc > osc else 0.5 if sc == osc else 0
+            return acc
+        for weeks, res in (([1, 2, 3, 4], got[0]), ([2, 3], got[1])):
+            for t, (g, sb, sa, sp, real) in ref(weeks).items():
+                r = res[str(t)]
+                self.assertEqual(r["games"], g)
+                self.assertAlmostEqual(r["sos"], sb / g, places=9)
+                self.assertAlmostEqual(r["schedule"], sp - sa, places=9)
+                self.assertAlmostEqual(r["result"], real - sp, places=9)
+                self.assertAlmostEqual(r["schedule"] + r["result"], r["luck"], places=9)      # the two parts make up Luck
+                self.assertAlmostEqual(r["luck"], real - sa, places=9)
+
     def test_a_report_without_made_attempts_is_refused_not_misread(self):
         old = json.loads(json.dumps(self.doc))
         for k, v in old["views"].items():

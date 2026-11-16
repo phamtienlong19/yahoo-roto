@@ -349,7 +349,23 @@ function range(doc,ws){
   power[t]={ranks:r,avg:g.length?sum(g)/g.length:null};avg[t]=power[t].avg;});
  rk=rankOf(avg,false);ids.forEach(function(t){power[t].rank=rk[t];});
  return {view:view,comp:{weeks:ws.slice(),weekly:wk,seasonRoto:seasonRoto,weeklyRoto:weeklyRoto,seasonAllPlay:seasonAllPlay,realRecord:realRecord,catLuck:catLuck,categoryKings:kings,boomBust:boomBust,power:power}};}
-return {range:range,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct3:pct3,signed:signed,sortKey:sortKey,tl:tl};
+/* Strength of schedule over a list of weeks. For each finished matchup: b = the opponent's all-play Win% that week WITHOUT the game against this team (so a team never makes
+   its own opponent look stronger or weaker), a = this team's all-play Win% (what its stats earned), p = the chance to beat that opponent from a and b (log5). Then
+   SOS = the average b; schedule luck = sum(p - a) (positive = easier opponents than the league average); result luck = real wins - sum(p), the rest of Luck (= real wins - sum(a)). */
+function schedule(doc,ws){
+ var ids=Object.keys(doc.teams).map(Number).sort(function(a,b){return a-b;}),wk=doc.composites.weekly,out={};
+ function pct(r){var g=r[0]+r[1]+r[2];return g?(2*r[0]+r[2])/(2*g):0.5;}
+ function log5(a,b){var d=a*(1-b)+(1-a)*b;return d?a*(1-b)/d:a;}
+ ids.forEach(function(t){out[t]={games:0,sos:0,a:0,p:0,real:0};});
+ ws.forEach(function(w){var wv=doc.views["w"+w];if(!wv)return;
+  ids.forEach(function(t){var v=wk[t]&&wk[t][w],o,ro,c,b,a,p,o_;if(!v||v.opp==null||v.result==null)return;
+   o=v.opp;ro=wv.teams[o].allPlay.slice();c=wv.matrix[o][t];
+   if(c[0]>c[1])ro[0]--;else if(c[0]<c[1])ro[1]--;else ro[2]--;
+   b=pct(ro);a=pct(wv.teams[t].allPlay);p=log5(a,b);o_=out[t];
+   o_.games++;o_.sos+=b;o_.a+=a;o_.p+=p;o_.real+=v.result==="W"?1:v.result==="T"?0.5:0;});});
+ ids.forEach(function(t){var o=out[t],g=o.games;out[t]={games:g,sos:g?o.sos/g:null,schedule:o.p-o.a,result:o.real-o.p,luck:o.real-o.a,real:o.real,expected:o.a};});
+ return out;}
+return {range:range,schedule:schedule,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct3:pct3,signed:signed,sortKey:sortKey,tl:tl};
 })();
 </script>
 <script>
@@ -362,7 +378,7 @@ var COARSE=!!(window.matchMedia&&matchMedia("(pointer:coarse)").matches),TAP=COA
  SCHEMA=3,SKEW=0,FEED=null,FEEDT=0,REFRESH=120000,STALE=15*60000,ME=Q.get("me")||"",ME_URL=!!Q.get("me"),DOC=null,
  TABS=[["standings","Standings",[["roto","Season Roto","roto"],["totals","Raw Totals","totals"],["weekly","Weekly Roto Points","weekly"],["power","Power Rank","power"]]],      /* [tab, label, [[view, label, board id]]]: a tab shows one board at a time */
   ["allplay","All-Play",[["matrix","Matrix","matrix"],["record","Season All-Play","allplay"]]],
-  ["luck","Luck",[["summary","Summary","real"],["week","By week","luckweek"],["catweek","By week \u00b7 categories","luckcatweek"],["cat","By category","luckcat"],["log","Matchup Log","matchlog"]]],
+  ["luck","Luck",[["summary","Summary","real"],["expected","Expected standings","expected"],["sos","Schedule","sos"],["week","By week","luckweek"],["catweek","By week \u00b7 categories","luckcatweek"],["cat","By category","luckcat"],["log","Matchup Log","matchlog"]]],
   ["records","Records",[["kings","Category Kings","kings"],["boom","Boom / Bust","boom"]]]],
  ALIAS={roto:["standings","roto"],totals:["standings","totals"],weekly:["standings","weekly"],power:["standings","power"],matrix:["allplay","matrix"],allplay:["allplay","record"],real:["luck","summary"],luck:["luck","week"],
   luckweeks:["luck","week"],catluck:["luck","cat"],matchlog:["luck","log"],kings:["records","kings"],boom:["records","boom"]},      /* every board link ever shipped (?board=roto, ?board=real ...) still opens the same table */
@@ -562,7 +578,9 @@ function tl(r,all){return P.tl(r,all);}
 function orderBy(map,key){return Object.keys(map).sort(function(a,b){return map[a][key]-map[b][key]||a-b;});}
 function chips(arr,n){return h("span",{class:"chips"},arr.map(function(r){return h("span",{class:P.rankCls(r,n),text:String(r)});}));}
 function luckCls(x,k){k=k||1;return x==null?"mid":x>=0.5*k?"green-strong":x>0.15*k?"green-soft":x<=-0.5*k?"red-strong":x<-0.15*k?"red-soft":"mid";}   /* one week's luck: matchup result minus the all-play Win% */
-var CLC={};function clw(w){return CLC[w]||(CLC[w]=P.catLuckWeek(DOC,w));}
+var CLC={},SCC={};function sched(){var k=C_key();return SCC[k]||(SCC[k]=P.schedule(DOC,comp().weeks));}
+function C_key(){var r=rng();return r[0]+"-"+r[1];}
+function clw(w){return CLC[w]||(CLC[w]=P.catLuckWeek(DOC,w));}
 function resVal(r){return r==="W"?1:r==="T"?0.5:0;}
 function catsText(c){return c[0]+"-"+c[1]+(c[2]?"-"+c[2]:"");}
 function boardSheet(b){var LL={luckweek:"week",luckcatweek:"catweek",luckcat:"cat"}[b],C=comp(),n=Object.keys(DOC.teams).length,s=sv(),RK=[],sub={
@@ -611,6 +629,20 @@ function boardSheet(b){var LL={luckweek:"week",luckcatweek:"catweek",luckcat:"ca
     var other=L==="week"?(cl[id]?cl[id].luck:null):mk[id];tr.appendChild(td(P.signed(prim[id],2),"total sep "+luckCls(prim[id],K*WK)));tr.appendChild(td(P.signed(other,2),"tot"));tr.appendChild(td(tl(LR[i],LR),"rank sep"));return tr;});
    note=(L==="week"?"Each week: the matchup result (win 1, tie half, loss 0) minus what that week's stats earned, which is the all-play Win%, the share of the other teams you would have beaten. A +0.60 means a win that the stats only earned 40% of the time; a −0.80 is a loss that the stats earned 80% of the time. Matchup luck = the weeks added up, the same total as Real Record & Luck."
     :"Each week: the categories you won against your actual opponent minus the categories your stats earned (in each category, the share of the other teams you would have beaten, added up)"+(pick?", for "+pick+" only":" over every category")+". Positive = you won more categories than your numbers deserved that week. Cat luck = the weeks added up.")+" Both totals are shown on every view of this board. Use the week range under the board buttons to look at any stretch.";}}
+ else if(b==="expected"){title="Expected Standings";var ids=Object.keys(C.realRecord),RR=C.realRecord,rwv={},ewv={};ids.forEach(function(i){rwv[i]=RR[i].realWins;ewv[i]=RR[i].expectedWins;});
+  function crank(m){var o={};ids.forEach(function(i){o[i]=1+ids.filter(function(j){return m[j]>m[i]+1e-9;}).length;});return o;}
+  var rr=crank(rwv),er=crank(ewv),o=ids.slice().sort(function(a,c){return er[a]-er[c]||ewv[c]-ewv[a]||a-c;}),ER=o.map(function(i){return er[i];}),RRK=o.map(function(i){return rr[i];});
+  heads=["Team",["Exp. rank",null,"Rank by expected wins (what the stats earned)"],["Real rank",null,"Rank by matchup wins actually won"],["Diff",null,"Expected rank minus real rank: positive = the results are better than the stats earned"],["Matchups"],["Real wins"],["Expected wins"],["Luck"]];
+  rows=o.map(function(id,i){var r=RR[id],d=er[id]-rr[id];return h("tr",null,[teamTh(id),td(tl(er[id],ER),"rank "+P.rankCls(er[id],n)),td(tl(rr[id],RRK),"rank "+P.rankCls(rr[id],n)),td(P.signed(d,0),"total "+luckCls(d,n/4)),td(r.record.join("-")),td(String(r.realWins)),td(r.expectedWins.toFixed(2)),td(P.signed(r.luck,2),"total "+luckCls(r.luck,Math.sqrt(C.weeks.length)))]);});
+  sub="Teams ordered by what their stats earned, next to where their results put them";
+  note="Expected rank orders teams by expected wins (every week's all-play Win% added up): the standings the stats would give. Real rank orders them by matchup wins actually won (a tied matchup counts half; level teams share a rank). Diff = expected rank minus real rank: +3 means the results sit three places better than the stats earned, −3 three places worse. Luck = real wins minus expected wins.";}
+ else if(b==="sos"){title="Strength of Schedule";var ids=Object.keys(C.realRecord),SC=sched(),avg=0,cnt=0;ids.forEach(function(i){if(SC[i].sos!=null){avg+=SC[i].sos;cnt++;}});avg=cnt?avg/cnt:0.5;
+  var o=ids.slice().sort(function(a,c){return (SC[c].sos==null?-1:SC[c].sos)-(SC[a].sos==null?-1:SC[a].sos)||a-c;}),SR=o.map(function(i,k){return 1+o.filter(function(j){return (SC[j].sos||0)>(SC[i].sos||0)+1e-9;}).length;}),WK=Math.sqrt(C.weeks.length);
+  heads=["Team",["SOS",null,"Average Win% of the opponents faced, each without the game against this team"],["vs avg",null,"SOS minus the league average"],["Rank",null,"1 = toughest schedule"],["Schedule luck",null,"Expected wins from facing these opponents instead of average ones"],["Result luck",null,"Real wins minus the wins the opponents' strength predicted"],["Luck",null,"Real wins minus expected wins (Schedule luck + Result luck)"]];
+  rows=o.map(function(id,i){var r=SC[id],d=r.sos==null?null:r.sos-avg;return h("tr",null,[teamTh(id),td(P.pct3(r.sos),"cat "+(d==null?"mid":d>0.03?"red-strong":d>0.01?"red-soft":d<-0.03?"green-strong":d<-0.01?"green-soft":"mid")),td(P.signed(d==null?null:d,3),""),td(tl(SR[i],SR),"rank"),
+   td(P.signed(r.schedule,2),"total "+luckCls(r.schedule,0.4*WK)),td(P.signed(r.result,2),"total "+luckCls(r.result,0.4*WK)),td(P.signed(r.luck,2),"total "+luckCls(r.luck,WK))]);});
+  sub="Who each team actually played, and how much of its luck came from the schedule";
+  note="SOS = the average all-play Win% of the opponents a team faced, counting each opponent's week without its game against this team, so a team never changes its own opponents' numbers. Rank 1 is the toughest schedule; a harder schedule is red, an easier one green. Schedule luck: for each matchup the chance of beating that opponent is estimated from both teams' Win% that week (log5: a·(1−b) ÷ (a·(1−b) + (1−a)·b), where a = the team's Win% and b = the opponent's); the sum over the weeks minus the team's own expected wins is the schedule luck (positive = easier opponents than average). Result luck is what is left of Luck: real wins minus the wins those opponents predicted. It is an estimate, and it is range-aware like every board.";}
  else if(b==="matchlog"){title="Matchup Log";var items=[];
   Object.keys(C.weekly).forEach(function(id){C.weeks.forEach(function(w){var v=C.weekly[id][w];if(!v||v.result==null||v.opp==null)return;items.push({id:id,w:w,v:v,o:C.weekly[v.opp][w],x:resVal(v.result)-v.winPct});});});
   items.sort(function(a,c){return (c.x-a.x)||a.w-c.w||a.id-c.id;});
@@ -777,7 +809,7 @@ function initRange(){var m=S.range,f=DOC.weeks[0],L=lastWeek(),a,b;S.range=null;
 function accept(d){if(!d||!d.views||!d.views.season||!d.composites)throw new Error("not a roto report file (schema 2)");
  if(d.schemaVersion&&d.schemaVersion>SCHEMA)throw new Error("This page is older than the report format ("+d.schemaVersion+"). Reload the page to update it.");
  var k=JSON.stringify(d);if(DOC&&k===LAST){drawStatus();return;}      /* a refresh with nothing new must not redraw (it would reset the reader's scroll) */
- LAST=k;var first=!DOC;DOC=d;RC={};CLC={};if(first){loadMe();initRange();}if(first)render();else renderKeep();}
+ LAST=k;var first=!DOC;DOC=d;RC={};CLC={};SCC={};if(first){loadMe();initRange();}if(first)render();else renderKeep();}
 function srcFor(){if(SRC)return SRC;return LEAGUE&&REPO?"https://raw.githubusercontent.com/"+REPO+"/data/"+LEAGUE+"/report.json":"report.json";}
 function load(){if(window.__REPORT__){try{accept(window.__REPORT__);}catch(e){fail(String(e.message||e));}return;}
  if(!SRC&&!LEAGUE&&REPO&&!STATIC){   /* the bare homepage: open the first league in leagues.json (each league has its own address, <site>/<id>/) */
