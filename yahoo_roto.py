@@ -863,7 +863,7 @@ def _fmt(cat, v):
 
 
 # ------------------------------------------------------------------ files: self-contained HTML and the three images
-IMAGES = (("roto", "roto", 1680), ("stats", "stats", 1680), ("allplay", "allplay", 2600))        # (page view, file name, css width); drawn at device scale 1.5
+IMAGES = (("roto", "roto", 1680), ("stats", "stats", 1680), ("allplay", "allplay", 2600), ("matchups", "matchups", 1680))        # (page view, file name, css width); drawn at device scale 1.5
 SEASON_BOARDS = ("roto", "weekly", "allplay", "real", "luckweeks", "catluck", "kings", "boom", "power")                   # the season composites; files are season-<board>.png
 SEASON_WIDTH = 1680
 SCALE = 1.5

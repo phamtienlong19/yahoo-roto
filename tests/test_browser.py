@@ -34,6 +34,9 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  var sf=p.d.querySelector('.snapbar select[aria-label="From week"]');sf.value='2';sf.dispatchEvent(new p.w.Event('change'));R.h1c=txt(p.d.querySelector('h1'));R.url=p.w.location.search;
  R.activeChips=p.d.querySelectorAll('.snapbar button.on').length;
  p=await load('season=1&board=luckweeks&range=2-3');R.lwH1=txt(p.d.querySelector('h1'));R.lwCols=p.d.querySelectorAll('.tscroll .st thead tr:last-child th').length;R.lwRows=p.d.querySelectorAll('.st tbody tr').length;
+ p=await load('week=4&view=matchups');R.muRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.muPairs=p.d.querySelectorAll('.tscroll .st tbody tr.pe').length;R.muSortable=p.d.querySelectorAll('.tscroll .st th.sortable').length;
+ R.muLuck=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).map(function(r){return parseFloat(r.cells[r.cells.length-1].textContent.replace('\u2212','-'))}).reduce(function(a,b){return a+b},0);
+ p=await load('season=1&board=matchlog&range=1-3');R.mlRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.mlH1=txt(p.d.querySelector('h1'));
  p=await load('week=4&view=stats');
  var heads=[].slice.call(p.d.querySelectorAll('.st thead tr:last-child th')),ix=heads.map(txt).indexOf('PTS');
  R.crowns=p.d.querySelectorAll('.st th.team .crown').length;R.vs=p.d.querySelectorAll('.st th.team .vs').length;R.scoreClasses=[].slice.call(p.d.querySelectorAll('td.score')).map(function(e){return e.className.replace('score ','')});
@@ -105,6 +108,15 @@ class Browser(unittest.TestCase):
         self.assertIn("Weeks 2-4", self.R["h1c"])
         self.assertIn("range=2-4", self.R["url"])
         self.assertEqual(self.R["activeChips"], 0)                       # a custom range is neither of the two preset chips
+
+    def test_matchup_view_lists_each_matchup_as_a_pair_of_rows_with_plain_numbers(self):
+        self.assertEqual((self.R["muRows"], self.R["muPairs"]), (18, 9))
+        self.assertEqual(self.R["muSortable"], 0)                         # pairs must stay together
+        self.assertAlmostEqual(self.R["muLuck"], 0, delta=0.2)            # luck is zero-sum over a week (up to the 2-decimal rounding of 18 cells)
+
+    def test_matchup_log_has_a_row_per_team_and_week(self):
+        self.assertEqual(self.R["mlRows"], 3 * 18)
+        self.assertIn("Weeks 1-3", self.R["mlH1"])
 
     def test_luck_by_week_has_a_column_per_week_in_the_range(self):
         self.assertIn("Weeks 2-3", self.R["lwH1"])
