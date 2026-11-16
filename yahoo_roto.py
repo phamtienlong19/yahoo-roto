@@ -717,14 +717,24 @@ def configured_champion(league, root=None):
         return None
 
 
+def _norm(text):
+    """A name for comparing: lower case, punctuation dropped, spaces collapsed ("M. Jordat" == "m jordat")."""
+    return " ".join(re.sub(r"[^\w\s]", " ", str(text)).casefold().split())
+
+
 def resolve_champion(spec, names):
-    """A team id (as a number or text) or a team name (any case, extra spaces ignored) -> the team id in `names` ({id: name}), or None. Never raises: no match means no crown."""
+    """A team id (as a number or text) or a team name -> the team id in `names` ({id: name}), or None. Names match ignoring case, punctuation and extra spaces; Yahoo team
+    names often carry a tagline ("M. Jordat | The Silver Seekers"), so if nothing matches the whole name the part before the "|" is tried. Never raises: no match, or
+    more than one, means no crown."""
     if spec is None or str(spec).strip() == "":
         return None
     spec = str(spec).strip()
     if spec.isdigit() and int(spec) in names:
         return int(spec)
-    hits = [t for t, n in names.items() if " ".join(str(n).split()).casefold() == " ".join(spec.split()).casefold()]
+    want = _norm(spec)
+    hits = [t for t, n in names.items() if _norm(n) == want]
+    if not hits:
+        hits = [t for t, n in names.items() if "|" in str(n) and _norm(str(n).split("|", 1)[0]) == want]
     if len(hits) != 1:
         print("note: champion %r %s; no crown shown" % (spec, "matches %d teams" % len(hits) if hits else "not found among the team names"), file=sys.stderr)
         return None
