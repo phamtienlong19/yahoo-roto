@@ -846,7 +846,6 @@ def simulate(st, ids, points, remaining, divisions=None, spots=None, div_winners
             cache[key] = c
         return cache[key]
     known = [None if wk is None else [(ix[a], ix[b], cdf_of(ix[a], ix[b])) for a, b in wk] for wk in remaining]
-    unknown = any(wk is None for wk in known)
     base_pts = [float(points[t]) for t in ids]
     divs = divisions or {}
     div_of = [divs.get(t) for t in ids]
