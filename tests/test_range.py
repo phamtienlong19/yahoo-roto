@@ -254,6 +254,54 @@ class RangeParity(unittest.TestCase):
                         self.assertEqual(r["games"], len(played))
         self.assertTrue(any(r["strong"]["games"] + r["weak"]["games"] > 0 for k, r in got["matchups"][3].items() if k != "order"))     # the golden league has real games to count
 
+    def test_opponent_squares_rate_every_weeks_opponent_by_its_real_record(self):
+        doc = golden.build_report(18, 4, regular=10)
+        weekly = doc["composites"]["weekly"]
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "doc.json")
+            with open(path, "w") as f:
+                json.dump(doc, f)
+            calls = ["RotoPure.oppByWeek(d,[1,2,3],'matchups')", "RotoPure.oppByWeek(d,[2,3],'cats')", "RotoPure.oppByWeek(d,d.weeks,'matchups',d.odds.schedule)"]
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([%s]))" % (path, ",".join(calls))
+            out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        got = json.loads(out.stdout)
+        teams = [int(t) for t in doc["teams"]]
+
+        def pct(t, ws, basis):
+            rec = [0, 0, 0]
+            for w in ws:
+                v = weekly[str(t)][str(w)]
+                if v["opp"] is None or v["result"] is None:
+                    continue
+                g = v["catRecord"] if basis == "cats" else {"W": [1, 0, 0], "L": [0, 1, 0], "T": [0, 0, 1]}[v["result"]]
+                rec = [a + b for a, b in zip(rec, g)]
+            n = sum(rec)
+            return (2 * rec[0] + rec[2]) / (2 * n) if n else None
+
+        def rank_of(ws, basis):
+            pc = {t: pct(t, ws, basis) for t in teams}
+            return {t: 1 + sum(1 for j in teams if pc[j] is not None and pc[j] > pc[t]) for t in teams}
+        for ws, basis, res in (([1, 2, 3], "matchups", got[0]), ([2, 3], "cats", got[1])):
+            rk = rank_of(ws, basis)
+            for t in teams:
+                want = [{"week": w, "opp": weekly[str(t)][str(w)]["opp"], "rank": rk[weekly[str(t)][str(w)]["opp"]]} for w in ws if weekly[str(t)][str(w)]["result"]]
+                self.assertEqual([{k: x[k] for k in ("week", "opp", "rank")} for x in res[str(t)]], want, (basis, t))
+                for x in res[str(t)]:
+                    tied = sum(1 for j in teams if rk[j] == x["rank"])
+                    self.assertAlmostEqual(x["place"], x["rank"] + (tied - 1) / 2, places=9)                # level opponents share their average place
+        rk = rank_of([1, 2, 3, 4], "matchups")                                              # the weeks still to come: from the pairings, the opponent's record through week 4
+        sched = doc["odds"]["schedule"]
+        for t in teams:
+            want = []
+            for w in sorted(map(int, sched)):
+                opp = next((b if a == t else a for a, b in sched[str(w)] if t in (a, b)), None)
+                want.append({"week": w, "opp": opp, "rank": rk[opp] if opp is not None else None})
+            self.assertEqual([{k: x[k] for k in ("week", "opp", "rank")} for x in got[2][str(t)]], want, t)
+        self.assertEqual(sorted(x["rank"] for t in teams for x in got[0][str(t)]), sorted(rank_of([1, 2, 3], "matchups")[x["opp"]] for t in teams for x in got[0][str(t)]))
+
     def test_a_report_without_made_attempts_is_refused_not_misread(self):
         old = json.loads(json.dumps(self.doc))
         for k, v in old["views"].items():
