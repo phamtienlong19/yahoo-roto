@@ -72,8 +72,11 @@ def build_pages(n=18, weeks=4, seed=7, regular=None, divisions=False, spots=6):
     return pages
 
 
-def build_report(n=18, weeks=4, seed=7, champion="sup fam", cache=None, **kw):
-    fx, orig = FakeFetcher(build_pages(n, weeks, seed, **kw)), yr.Fetcher
+def build_report(n=18, weeks=4, seed=7, champion="sup fam", cache=None, drop=(), **kw):
+    pages = build_pages(n, weeks, seed, **kw)
+    for k in [k for k in pages if any(k.startswith("week=%d&" % w) for w in drop)]:         # weeks whose pages cannot be read
+        del pages[k]
+    fx, orig = FakeFetcher(pages), yr.Fetcher
     yr.Fetcher = lambda **k: fx
     try:
         return yr.report("9", champion=champion, cache=cache)

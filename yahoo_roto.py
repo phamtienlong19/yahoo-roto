@@ -730,10 +730,11 @@ def _wval(cores, week, t, sp):
 
 
 # ------------------------------------------------------------------ playoff odds
-SIMS = 8000                    # simulated rest-of-seasons; the figures are accurate to about +-1 percentage point
+SIMS = 50000                   # simulated rest-of-seasons: any figure is accurate to within about +-0.4 percentage points (95%)
 PRIOR_WEEKS = 2                # a team's weekly average counts as this many weeks of league-average play too (early in the season a few weeks say little)
-SCHEDULE_PAGES_PER_PASS = 30   # future pairings are fetched gradually and remembered (an 18-team league needs 9 pages per week)
-SCHEDULE_REFRESH = 24 * 3600
+SCHEDULE_PAGES_PER_PASS = 400  # the whole remaining schedule is read in the first pass (9 pages a week for 18 teams) and remembered; this only caps a runaway
+SCHEDULE_REFRESH = 24 * 3600   # a remembered week is read again after a day (a commissioner can change the schedule) ...
+SCHEDULE_REFRESH_WEEKS = 2     # ... but at most this many weeks per pass, oldest first, so the refresh is a trickle
 
 
 def _phi(x):
@@ -755,13 +756,15 @@ def load_schedule(cache, league):
         return {}
 
 
-def fetch_schedule(fx, league, base, ids, weeks, cache, now, budget=SCHEDULE_PAGES_PER_PASS):
-    """Who plays whom in the given future weeks: Yahoo shows the pairing on a week's matchup page before the week starts. Pairings are remembered in the cache and
-    re-read after a day; at most `budget` pages are fetched per pass, missing weeks first. -> {week: [[a, b], ...]} for the weeks known so far (a failure only means fewer)."""
+def fetch_schedule(fx, league, base, ids, weeks, cache, now, budget=SCHEDULE_PAGES_PER_PASS, refresh_weeks=SCHEDULE_REFRESH_WEEKS):
+    """Who plays whom in the given future weeks: Yahoo shows the pairing on a week's matchup page before the week starts, but has no page listing a whole week, so it
+    is one page per matchup. Weeks not known yet are all read now (`budget` caps the pages per pass); known weeks are re-read after a day, at most `refresh_weeks` a pass.
+    Each finished week is saved at once, so an interrupted pass keeps its progress. -> {week: [[a, b], ...]} for the weeks known (a failure only means fewer)."""
     sched = load_schedule(cache, league)
-    todo = sorted((w for w in weeks if w not in sched or now - sched[w]["at"] >= SCHEDULE_REFRESH), key=lambda w: (w in sched, sched.get(w, {}).get("at", 0), w))
-    used, changed = 0, False
-    for w in todo:
+    missing = [w for w in weeks if w not in sched]
+    stale = sorted((w for w in weeks if w in sched and now - sched[w]["at"] >= SCHEDULE_REFRESH), key=lambda w: (sched[w]["at"], w))[:refresh_weeks]
+    used = 0
+    for w in missing + stale:
         if used + len(ids) // 2 > budget:                               # a week is read whole or not at all
             break
         pairs, seen = [], set()
@@ -779,9 +782,8 @@ def fetch_schedule(fx, league, base, ids, weeks, cache, now, budget=SCHEDULE_PAG
             print("note: could not read the schedule for week %d (%s)" % (w, e), file=sys.stderr)
             break
         sched[w] = {"at": now, "pairs": pairs}
-        changed = True
-    if changed and cache:
-        write_atomic(schedule_path(cache, league), json.dumps({str(w): v for w, v in sched.items()}, separators=(",", ":")))
+        if cache:
+            write_atomic(schedule_path(cache, league), json.dumps({str(k): v for k, v in sched.items()}, separators=(",", ":")))
     return {w: sched[w]["pairs"] for w in weeks if w in sched}
 
 
@@ -829,54 +831,70 @@ def simulate(st, ids, points, remaining, divisions=None, spots=None, div_winners
     div_winners every division's leader plus the best of the rest by overall standing, otherwise the top `spots`.
     -> {team: {"playoff", "first", "rank" (expected), "dist": [P(finish 1st), ...]}}"""
     rnd = random.Random(seed)
+    rand = rnd.random
     n, ncat = len(ids), len(st)
-    cdf = {}
+    ix = {t: i for i, t in enumerate(ids)}
+    cache = {}
 
-    def draw(a, b):
-        key = (a, b) if a < b else (b, a)
-        if key not in cdf:
-            d, acc, c = cat_win_distribution(key[0], key[1], st), 0.0, []
+    def cdf_of(a, b):                                                   # cumulative chances that team a (index) wins 0..ncat categories against b
+        key = (a, b)
+        if key not in cache:
+            d, acc, c = cat_win_distribution(ids[a], ids[b], st), 0.0, []
             for q in d:
                 acc += q
                 c.append(acc)
-            cdf[key] = c
-        k = bisect.bisect(cdf[key], rnd.random() * cdf[key][-1])
-        k = min(k, ncat)
-        return (k, ncat - k) if a < b else (ncat - k, k)
-    playoff, first, dist = {t: 0 for t in ids}, {t: 0 for t in ids}, {t: [0] * n for t in ids}
+            cache[key] = c
+        return cache[key]
+    known = [None if wk is None else [(ix[a], ix[b], cdf_of(ix[a], ix[b])) for a, b in wk] for wk in remaining]
+    base_pts = [float(points[t]) for t in ids]
     divs = divisions or {}
+    div_of = [divs.get(t) for t in ids]
+    use_divs = bool(div_winners and divs and spots)
+    playoff, first, dist = [0] * n, [0] * n, [[0] * n for _ in range(n)]
+    bis = bisect.bisect
+    order_idx = list(range(n))
     for _ in range(sims):
-        pts = dict(points)
-        for week in remaining:
-            pairs = week
-            if pairs is None:
-                order = ids[:]
-                rnd.shuffle(order)
-                pairs = [order[i:i + 2] for i in range(0, n - 1, 2)]
-            for a, b in pairs:
-                ka, kb = draw(a, b)
-                pts[a] += ka
-                pts[b] += kb
-        order = sorted(ids, key=lambda t: (-pts[t], rnd.random()))
+        pts = base_pts[:]
+        for wk in known:
+            if wk is None:
+                perm = order_idx[:]
+                rnd.shuffle(perm)
+                pairs = [(perm[i], perm[i + 1], cdf_of(perm[i], perm[i + 1])) for i in range(0, n - 1, 2)]
+            else:
+                pairs = wk
+            for a, b, c in pairs:
+                k = bis(c, rand() * c[-1])
+                if k > ncat:
+                    k = ncat
+                pts[a] += k
+                pts[b] += ncat - k
+        order = sorted(order_idx, key=lambda t: pts[t] + rand() * 0.01, reverse=True)      # level teams are separated at random (points move in halves)
         for r, t in enumerate(order):
             dist[t][r] += 1
         first[order[0]] += 1
         if spots:
-            if div_winners and divs:
+            if use_divs:
                 win = {}
                 for t in order:
-                    win.setdefault(divs.get(t), t)
+                    win.setdefault(div_of[t], t)
                 chosen = list(win.values())[:spots]
-                chosen += [t for t in order if t not in chosen][:max(0, spots - len(chosen))]
+                taken = set(chosen)
+                chosen += [t for t in order if t not in taken][:max(0, spots - len(chosen))]
             else:
                 chosen = order[:spots]
             for t in chosen:
                 playoff[t] += 1
-    return {t: {"playoff": playoff[t] / sims, "first": first[t] / sims, "rank": sum((r + 1) * c for r, c in enumerate(dist[t])) / sims, "dist": [c / sims for c in dist[t]]} for t in ids}
+    return {t: {"playoff": playoff[i] / sims, "first": first[i] / sims, "rank": sum((r + 1) * c for r, c in enumerate(dist[i])) / sims, "dist": [c / sims for c in dist[i]]}
+            for t, i in ix.items()}
+
+
+def odds_path(cache, league):
+    return os.path.join(cache, "%s-odds.json" % league) if cache else None
 
 
 def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, base, cache, now):
-    """The `odds` part of the report, or None when it cannot be made (the league's playoff setup is not on the settings page, or no week has finished)."""
+    """The `odds` part of the report, or None when it cannot be made (the league's playoff setup is not on the settings page, or no week has finished). The simulation
+    only runs when its inputs changed since the last pass (points so far, team strengths, schedule, playoff setup): the answer is remembered in the cache."""
     spots, start = settings.get("playoff_teams"), settings.get("playoff_start")
     done = len(weeks_data) - 1
     if not spots or not start or done < 1:
@@ -892,12 +910,30 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
     if not st:
         return None
     points = {t: float(final_cat_record[t][0]) + final_cat_record[t][2] / 2 for t in ids}
-    res = simulate(st, ids, points, remaining, settings.get("divisions") or {}, spots, settings.get("div_winners"), seed=int(league) * 1000 + done)
+    divisions = settings.get("divisions") or {}
+    inputs = {"v": 2, "sims": SIMS, "spots": spots, "start": start, "dw": bool(settings.get("div_winners")), "left": left, "points": points,
+              "div": sorted(divisions.items()), "sched": [sorted(map(list, wk)) if wk else None for wk in remaining],
+              "st": {c: {"sd": round(v["sd"], 9), "lower": v["lower"], "mean": sorted((t, round(x, 9)) for t, x in v["mean"].items())} for c, v in st.items()}}
+    fp = hashlib.sha1(json.dumps(inputs, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    p = odds_path(cache, league)
+    try:
+        with open(p, encoding="utf-8") as f:
+            saved = json.load(f)
+        if saved.get("fp") == fp and isinstance(saved.get("odds"), dict):
+            return saved["odds"]
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    res = simulate(st, ids, points, remaining, divisions, spots, settings.get("div_winners"), seed=int(league) * 1000 + done)
     r4 = lambda x: round(x, 4)                                          # noqa: E731
-    return {"spots": spots, "regularWeeks": regular, "remaining": left, "scheduleWeeks": sum(1 for x in remaining if x), "sims": SIMS,
-            "divisions": sorted(set((settings.get("divisions") or {}).values())) or None, "divisionWinners": bool(settings.get("div_winners") and settings.get("divisions")),
-            "teams": {str(t): {"playoff": r4(r["playoff"]), "first": r4(r["first"]), "rank": r4(r["rank"]), "dist": [r4(x) for x in r["dist"]],
-                              "division": (settings.get("divisions") or {}).get(t), "points": points[t]} for t, r in res.items()}}
+    known = sum(1 for x in remaining if x)
+    out = {"spots": spots, "regularWeeks": regular, "remaining": left, "scheduleWeeks": known, "complete": known == len(remaining), "sims": SIMS,
+           "margin": round(1.96 * math.sqrt(0.25 / SIMS) * 100, 2),
+           "divisions": sorted(set(divisions.values())) or None, "divisionWinners": bool(settings.get("div_winners") and divisions),
+           "teams": {str(t): {"playoff": r4(r["playoff"]), "first": r4(r["first"]), "rank": r4(r["rank"]), "dist": [r4(x) for x in r["dist"]],
+                              "division": divisions.get(t), "points": points[t]} for t, r in res.items()}}
+    if p:
+        write_atomic(p, json.dumps({"fp": fp, "odds": out}, separators=(",", ":")))
+    return out
 
 
 SCHEMA_VERSION = 3
