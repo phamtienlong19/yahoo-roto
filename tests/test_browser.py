@@ -45,6 +45,8 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  for(var b of ['roto','totals','weekly','power','matrix','allplay','real','luck','luckweeks','catluck','matchlog','kings','boom','standings','records']){
   p=await load('season=1&board='+b);R.alias[b]=[txt(p.d.querySelector('h1')),txt(p.d.querySelector('#nav .active')),txt(p.d.querySelector('#lensbar button.on')),p.w.location.search];}
  p=await load('season=1&board=real');R.tabs=[].slice.call(p.d.querySelectorAll('#nav button')).map(txt);R.lenses=[].slice.call(p.d.querySelectorAll('#lensbar button')).map(txt);R.realHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
+ p=await load('season=1&board=luck&lens=expected&range=1-3');R.exH1=txt(p.d.querySelector('h1'));R.exHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.exRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
+ p=await load('season=1&board=luck&lens=sos&range=1-3');R.sosH1=txt(p.d.querySelector('h1'));R.sosHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.sosRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
  p=await load('season=1&board=matchlog&range=1-3');R.mlRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.mlH1=txt(p.d.querySelector('h1'));
  p=await load('week=4&view=stats');
  var heads=[].slice.call(p.d.querySelectorAll('.st thead tr:last-child th')),ix=heads.map(txt).indexOf('PTS');
@@ -160,8 +162,16 @@ class Browser(unittest.TestCase):
 
     def test_four_tabs_with_the_views_of_the_open_tab_under_them(self):
         self.assertEqual(self.R["tabs"], ["Standings", "All-Play", "Luck", "Records"])
-        self.assertEqual(self.R["lenses"], ["Summary", "By week", "By week \u00b7 categories", "By category", "Matchup Log"])
+        self.assertEqual(self.R["lenses"], ["Summary", "Expected standings", "Schedule", "By week", "By week \u00b7 categories", "By category", "Matchup Log"])
         self.assertIn("Cat luck", self.R["realHeads"])                               # real record and luck, with category luck folded in
+
+    def test_expected_standings_and_strength_of_schedule_views(self):
+        self.assertIn("Expected Standings", self.R["exH1"])
+        self.assertEqual(self.R["exHeads"][:4], ["Team", "Exp. rank", "Real rank", "Diff"])
+        self.assertEqual(self.R["exRows"], 18)
+        self.assertIn("Strength of Schedule", self.R["sosH1"])
+        self.assertEqual(self.R["sosHeads"], ["Team", "SOS", "vs avg", "Rank", "Schedule luck", "Result luck", "Luck"])
+        self.assertEqual(self.R["sosRows"], 18)
 
     def test_matchup_log_has_a_row_per_team_and_week(self):
         self.assertEqual(self.R["mlRows"], 3 * 18)
