@@ -16,6 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, ".."))
 import golden  # noqa: E402
+import test_current_week  # noqa: E402
 import yahoo_roto as yr  # noqa: E402
 
 HARNESS = r"""<!doctype html><meta charset=utf-8><body><pre id=out>pending</pre><script>
@@ -72,6 +73,8 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
   spec[1].forEach(function(hd){var i=hs.indexOf(hd),sh={};if(i>=0)[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.colour.push([spec[0],hd,i,Object.keys(sh)]);});}
  p=await load('season=1&board=performance&lens=split','long/');(function(){var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);['Strong Win%','Weak Win%'].forEach(function(hd){var i=hs.indexOf(hd),sh={};[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.colour.push(['board=performance&lens=split (long season)',hd,i,Object.keys(sh)]);});})();
  p=await load('season=1&board=outlook&lens=odds');R.accSummary=txt(p.d.querySelector('.acc summary'));R.accRows=[].slice.call(p.d.querySelectorAll('.acct tbody tr')).map(function(r){return [].slice.call(r.cells).map(txt)});R.movers=txt(p.d.querySelector('.movers'));R.moverChips=p.d.querySelectorAll('.movers .mv').length;R.odSub=txt(p.d.querySelector('.view-subtitle'));R.odNote=txt(p.d.querySelector('details.how p'));
+ for(var q of ['board=roto','board=luck&lens=summary','board=outlook&lens=odds','board=outlook&lens=sos&per=rest','board=performance&lens=form','board=performance&lens=trends']){p=await load('season=1&'+q,'settled/');R.settledStatus=txt(p.d.querySelector('#status'));R.settledRows=(R.settledRows||[]).concat([p.d.querySelectorAll('.tscroll .st tbody tr').length]);}
+ p=await load('week=4&view=roto','settled/');R.settledWeekStatus=txt(p.d.querySelector('#status'));R.settledWeekH1=txt(p.d.querySelector('h1'));
  p=await load('season=1&board=outlook&lens=odds','early/');R.earlyMovers=p.d.querySelectorAll('.movers').length;R.earlyAcc=p.d.querySelectorAll('.acc,.accline').length;R.earlyRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
  R.spark={};
  for(var q of ['board=luck&lens=summary','board=weekly','board=outlook&lens=odds']){p=await load('season=1&'+q);R.spark[q]=[p.d.querySelectorAll('.tscroll td.trend svg').length,p.d.querySelectorAll('.tscroll td.trend svg polyline').length,p.d.querySelectorAll('.tscroll td.trend svg title').length,p.d.querySelectorAll('.tscroll td.trend svg line.z').length];}
@@ -126,6 +129,9 @@ class Browser(unittest.TestCase):
         none = json.loads(json.dumps(main))
         none["odds"] = None
         yr.write_html(none, os.path.join(cls.site, "none"))
+        pages = golden.build_pages(18, 4, 7, regular=10, divisions=True)                                 # Yahoo has turned to week 5: week 4 is over, its corrections still pending
+        settled = test_current_week.report(pages, test_current_week.Fake(pages, 5, test_current_week.corrections_page(26, 22)), tempfile.mkdtemp())
+        yr.write_html(settled, os.path.join(cls.site, "settled"))
         yr.write_html(golden.build_report(18, 2, regular=10, divisions=True), os.path.join(cls.site, "early"))                  # one finished week: no history, nothing to forecast yet
         yr.write_html(golden.build_report(18, 18, regular=20, divisions=True), os.path.join(cls.site, "long"))      # a full-length season: wide week grids
         old = golden.build_report(18, 4, regular=10, divisions=True)                                  # a report from before the week ranges: no made/attempts in the week views
@@ -330,6 +336,14 @@ class Browser(unittest.TestCase):
         self.assertIn("played from today", self.R["odSub"])
         self.assertIn("snapshot, not a forecast", self.R["odNote"])
         self.assertIn("not modelled", self.R["odNote"])
+
+    def test_a_week_yahoo_has_closed_is_final_with_a_note_about_pending_corrections(self):
+        self.assertIn("Wk 4 is complete; Yahoo may still correct box scores until Mon 16 Nov (4 pending, 22 arrived too late to count)", self.R["settledStatus"])
+        self.assertNotIn("still being played", self.R["settledStatus"])
+        self.assertNotIn("in progress", self.R["settledStatus"])
+        self.assertEqual([n >= 18 for n in self.R["settledRows"][:5]], [True] * 5, self.R["settledRows"])      # every table still draws without a live week (odds adds division rows; trends is a chart)
+        self.assertIn("Wk 4 is complete", self.R["settledWeekStatus"])
+        self.assertIn("Week 4", self.R["settledWeekH1"])
 
     def test_with_one_finished_week_there_is_nothing_to_grade_and_nobody_moved(self):
         self.assertEqual((self.R["earlyMovers"], self.R["earlyAcc"]), (0, 0))

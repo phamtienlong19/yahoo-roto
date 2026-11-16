@@ -52,7 +52,7 @@ To show a defending champion's crown, add `"champions": {"<league id>": "<team n
 
 ## Keeping it fresh
 - The feed refreshes about every 3 minutes while games are being played, and slows down when nothing changes.
-- Yahoo and the NBA fix box scores for a day or two. Corrected weeks are re-read automatically, and the page shows what changed.
+- A week counts as over when Yahoo itself moves to the next one. Yahoo and the NBA fix box scores until a set Monday: closed weeks are re-read until then, the page says what may still change, and it shows what did.
 - If a league fails to refresh several times in a row, the workflow opens one GitHub issue, and the page says why its data looks old.
 - Changing the code on `main` restarts the feed, so new features reach the data within minutes.
 - A daily check runs against a real league and fails if Yahoo's pages change shape.
