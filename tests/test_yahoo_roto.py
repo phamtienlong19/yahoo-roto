@@ -169,7 +169,6 @@ class AllPlayAndReport(unittest.TestCase):
                 _, _, wd, _ = yr.load("9", d, 0, now=T0, fixes=fixes)             # week 1 becomes final and is stored
                 self.assertEqual((fixes, wd[0]["teams"][1]["cols"]["PTS"]), ([], 30))
                 pages["week=1"] = self._league("27")["week=1"]                       # Yahoo corrects Team A's points: 30 -> 27 (A now trails B's 29)
-                n = len(fx.urls)
                 _, _, wd, _ = yr.load("9", d, 0, now=T0 + 1800, fixes=fixes)         # too early to look again: no request for week 1, old total kept
                 self.assertEqual((fixes, wd[0]["teams"][1]["cols"]["PTS"]), ([], 30))
                 _, _, wd, _ = yr.load("9", d, 0, now=T0 + 3700, fixes=fixes)         # one hour on: re-read, the change is noticed
