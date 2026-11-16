@@ -173,7 +173,7 @@ class RangeParity(unittest.TestCase):
             path = os.path.join(d, "doc.json")
             with open(path, "w") as f:
                 json.dump(doc, f)
-            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([RotoPure.sosRest(d,[1,2,3],d.odds.schedule,'matchups'),RotoPure.sosRest(d,[1,2,3],d.odds.schedule,'cats')]))" % path
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([RotoPure.sosRest(d,d.weeks,d.odds.schedule,'matchups'),RotoPure.sosRest(d,d.weeks,d.odds.schedule,'cats')]))" % path
             out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
         self.assertEqual(out.returncode, 0, out.stderr)
         got = json.loads(out.stdout)
@@ -186,7 +186,7 @@ class RangeParity(unittest.TestCase):
         headers = list(next(iter(wd[0]["teams"].values()))["cols"])
         specs, _ = yr.plan(st["categories"] or [h for h in headers if h and not h.endswith("M/A*")], headers)
         record = {"matchups": {}, "cats": {}}
-        for w in wd[:3]:                                                                   # the finished weeks
+        for w in wd:                                                                       # every week with results, the one in progress included
             tot = yr.totals([w], w["teams"])
             for x, y in w["matchups"]:
                 for a, b in ((x, y), (y, x)):
