@@ -1,0 +1,24 @@
+name: Canary
+
+# Once a day: fetch one real league the way the live workflow does and check the result still makes sense. If Yahoo changes its pages the parsers usually
+# return less instead of crashing, and the site just looks stale; a red run here (GitHub emails the owner) says so the same day.
+
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check the first league in leagues.json
+        run: python3 canary.py "$(python3 -c "import json;print(json.load(open('leagues.json'))['leagues'][0])")"

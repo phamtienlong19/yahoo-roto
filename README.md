@@ -13,10 +13,10 @@ python3 yahoo_roto.py 85092 --report out/ --png --week 3   # the same three imag
 python3 yahoo_roto.py 85092 --report out/ --png --season   # out/season-<board>.png for the seven season boards
 python3 yahoo_roto.py 85092 --report out/ --cache .cache   # reruns only fetch the newest week
 ```
-`index.html` (the page template; the report writes a self-contained copy with the JSON inlined) opens on the latest week with stats ("Week N (in progress)").
+The page has a **Save image** button (download icon, top right): one tap saves the board you are looking at as a PNG (the phone share sheet on a phone), drawn the same way as the `--png` files and following your current sort. `index.html` (the page template; the report writes a self-contained copy with the JSON inlined) opens on the latest week with stats ("Week N (in progress)").
 A week strip (`W1 ... WN`, `<` `>` buttons, left/right keys) switches weeks; the **Season** tab holds the composite boards (Season Roto, Raw Totals, All-Play
 Matrix, Weekly Roto Points, Season All-Play, Real Record & Luck, Category Luck, Category Kings, Boom / Bust, Power Rank). Roto Points / Raw Stats / All-Play Matrix keep the
-chosen week. The choice lives in the URL: `?week=3&view=allplay` (views `roto`, `stats`, `allplay`) or `?season=1&board=power`. It is built for phones too:
+chosen week. The newest week is still being played, so the Season tab has a toggle under the board buttons: **Weeks 1-N final** (the default for the derived boards, so a half-played week cannot skew Boom / Bust, Luck or Power Rank) or **incl. live week** (the default for Season Roto and Raw Totals, which are the current standings); `--png --season` images follow the same defaults. "Copy link" in the status line copies the exact view, including sort and your team. The choice lives in the URL: `?week=3&view=allplay` (views `roto`, `stats`, `allplay`) or `?season=1&board=power`. It is built for phones too:
 the team column sticks and wide tables scroll inside their own box, never the page. The look follows `reference/serie_a_week3.html`.
 
 The PNGs are drawn from the same page in static mode at device scale 1.5 (1680 px wide for roto, stats and the season boards, 2600 px for the all-play matrix), cropped to
@@ -26,12 +26,24 @@ the sheet. Set `$CHROME` if Chrome is not found. Fonts (Inter) come from Google 
 This repo is the setup: GitHub Pages serves `index.html` from `main`, and the `Roto live` workflow (`.github/workflows/roto-live.yml`) keeps
 `<league>/report.json` fresh on an orphan `data` branch.
 1. Settings > Pages: deploy from branch `main`, folder `/`. Settings > Actions > General: workflow permissions "Read and write".
-2. Put your league ids in `leagues.json`. Run the "Roto live" workflow once (Actions tab, optional league id). It loops about 115 minutes per run (every
-   ~4 min on game hours, 15 min otherwise), queues its own successor (GitHub drops many cron triggers), and force-pushes `<league>/report.json` to `data`.
+2. Put your league ids in `leagues.json`. Run the "Roto live" workflow once (Actions tab, optional league id). It loops about 115 minutes per run (the pace follows
+   the data, see `cadence.py`: about every 3 min while the totals are changing, slower the longer nothing moves, hourly in the offseason, never slower than 10 min in US game hours), queues its own successor (GitHub drops many cron triggers), and force-pushes `<league>/report.json` to `data`.
 3. Each league has its own address: `https://<owner>.github.io/yahoo-roto/<id>/` (e.g. `/207464/`). Adding a league = add the id to `leagues.json`, run `python3 pages.py` (writes `<id>/index.html`; a test fails if the copies are stale) and commit. The bare site address opens the first league. `?board=catluck` (or any season board) opens the Season tab directly, `&week=3&view=allplay` deep-links a week, `&me=<teamId>` marks your team.
    says "data is N min old" if the feed stalls. Add `&me=<teamId>` to mark your team, `&week=3&view=allplay` to deep-link.
 
 About 12 Yahoo requests per league per refresh (settings, standings, one page for the week list, the 8 pages of the in-progress week for 16 teams, one probe of the next week; finished weeks are cached), 1.5 s apart (~20 s). Keep `leagues.json` small.
+
+`leagues.json` can also name each league's defending champion, which gets a crown next to its name everywhere: `"champions": {"<league id>": "<team name or team id>"}` (names match ignoring case and extra spaces; no match means no crown). `--champion` on the command line overrides it.
+
+### Stat corrections
+Yahoo and the NBA correct box scores for a day or two after a game. A finished week stays in the cache but is read again about 1 h, 6 h, 24 h and 48 h after it was first stored; if any
+total moved, the new numbers replace the old ones (every board recomputes) and the change is kept on the report for 14 days: the page shows a dismissible banner (category totals that
+moved, roto-rank moves for that week, matchup results that flipped) and a dot on that week's button. Old cache files (no timestamp) are left alone.
+
+### Operations
+- **Alerts:** each pass records failures per league; after 5 in a row the workflow opens one GitHub issue ("Roto feed failing: league ID"), and `status.json` on the `data` branch lets the page say why a report looks old. Network failures, 5xx and 429 are retried before a pass counts as failed.
+- **Canary:** `canary.yml` runs `canary.py` daily against one real league; a red run means Yahoo's pages changed shape (or blocked the runner).
+- See `ARCHITECTURE.md` for how the pieces fit and `CONTRIBUTING.md` for running and extending the tests.
 
 ## How roto is computed
 Per category, teams are ranked (worst = 1 point, best = number of teams, level teams share the average place, fewer is better for TO/PF). Season roto adds
@@ -39,9 +51,10 @@ the weekly totals first; percentages come from summed makes and attempts. All-pl
 derived here and display-only: not a Yahoo number. A week is final once a later week has stats; the newest week is "in progress".
 
 ### Expected wins, by hand
-Each week, every team plays every other team in every category (all-play). Win% = (W + T/2) / (W + L + T) over those category battles; with 16 teams and 9
-categories that is 135 battles, so 90-40-5 is (90 + 2.5) / 135 = 0.685. Expected wins = the sum of those weekly Win% values (0.685 + 0.500 + 0.400 = 1.59 after
-three weeks). Luck = real matchup wins (a tie counts half) minus expected wins, so 3 real wins would be +1.41. It reads "how many matchups your stats should have won".
+Each week, every team plays every other team once (all-play). Each of those games is won by taking more of the categories than the opponent; level on categories is a tied game. With 16 teams that is 15 games a week, so the record is W-L-T out of 15, e.g. 10-4-1.
+Win% = (W + T/2) / (W + L + T) = (10 + 0.5) / 15 = 0.700. Expected wins = the sum of those weekly Win% values (0.700 + 0.500 + 0.400 = 1.60 after three weeks).
+Luck = real matchup wins (a tie counts half) minus expected wins, so 3 real wins would be +1.40. It reads "how many matchups your stats should have won".
+The matrix cell for two teams shows the category score of that game (6-3: six categories to three; 4-4-1: four each and one level).
 
 ### Category luck, by hand
 The same idea per category, on the **Category Luck** season board (`?season=1&board=catluck`). For one team, one category, one week: expected = the share of the

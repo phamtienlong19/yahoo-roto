@@ -218,7 +218,10 @@ class Shape(unittest.TestCase):
         finally:
             yr.Fetcher = orig
         self.assertEqual(doc["schema"], "yahoo-roto-report/2")
-        self.assertEqual(sorted(doc["views"]), ["season", "w1", "w2"])
+        self.assertEqual(sorted(doc["views"]), ["season", "seasonFinal", "w1", "w2"])
+        self.assertEqual(doc["views"]["seasonFinal"]["weeks"], [1])               # the newest week (2) is in progress: the final snapshot stops at week 1
+        self.assertEqual(doc["compositesFinal"]["weeks"], [1])
+        self.assertEqual(doc["views"]["season"]["weeks"], [1, 2])
         self.assertEqual(sorted(doc["composites"]), ["boomBust", "catLuck", "categoryKings", "power", "realRecord", "seasonAllPlay", "seasonRoto", "weekly", "weeklyRoto", "weeks"])
         w1 = doc["views"]["w1"]
         self.assertEqual(w1["matchups"], [[1, 2]])

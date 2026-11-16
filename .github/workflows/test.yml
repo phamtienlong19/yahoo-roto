@@ -11,14 +11,28 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Run tests (no network)
+      - name: Lint (unused imports, undefined names; this is the only thing installed, and only in CI)
+        run: python3 -m pip install --quiet pyflakes && python3 -m pyflakes yahoo_roto.py cadence.py canary.py pages.py tests
+      - name: Run tests (no network; includes the headless-Chrome page tests, which use the Chrome on the runner)
         run: python3 -m unittest discover -s tests -v
+
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the workflow files (and the shell inside them)
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color

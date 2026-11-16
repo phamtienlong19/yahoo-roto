@@ -30,11 +30,13 @@ import urllib.request
 from fractions import Fraction
 from html.parser import HTMLParser
 
-BASE = "https://basketball.fantasysports.yahoo.com/nba/{league}"
 SPORTS = {"nba": "basketball.fantasysports.yahoo.com/nba", "nfl": "football.fantasysports.yahoo.com/f1", "mlb": "baseball.fantasysports.yahoo.com/b1",
           "nhl": "hockey.fantasysports.yahoo.com/hockey"}
 LOWER_IS_BETTER = {"TO", "PF", "DQ", "GA", "GAA", "ERA", "WHIP", "BB"}
 UA = "yahoo-roto/1.0 (read-only; public pages)"
+RETRIES = 2                                                              # extra attempts for a request that failed in a way that may pass (timeout, 5xx, 429)
+BACKOFF = (2, 6)                                                         # seconds to wait before the 2nd and 3rd attempt
+TTL = {"settings": 12 * 3600, "standings": 6 * 3600, "weeks": 6 * 3600}   # pages that hardly ever change are not fetched on every pass
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -43,36 +45,75 @@ class RotoError(RuntimeError):
 
 
 # ------------------------------------------------------------------ fetching
-class Fetcher:
-    def __init__(self, delay=1.5, cache=None, out=print):
-        self.delay, self.cache, self.out, self.last = delay, cache, out, 0.0
-        if cache:
-            os.makedirs(cache, exist_ok=True)
+def write_atomic(path, text):
+    """Write a file so that a run killed half-way never leaves a truncated file behind (the cache is carried between runs)."""
+    d = os.path.dirname(os.path.abspath(path))
+    os.makedirs(d, exist_ok=True)
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
 
-    def get(self, url, keep=False):
-        path = os.path.join(self.cache, hashlib.sha1(url.encode()).hexdigest() + ".html") if self.cache and keep else None
-        if path and os.path.exists(path):
-            return open(path, encoding="utf-8").read()
-        wait = self.delay - (time.time() - self.last)
-        if wait > 0:
-            time.sleep(wait)
-        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html"})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                body, final = r.read().decode("utf-8", "replace"), r.geturl()
-        except urllib.error.HTTPError as e:
-            raise RotoError("%s answered HTTP %s" % (url, e.code))
-        except urllib.error.URLError as e:
-            raise RotoError("could not reach %s (%s)" % (url, e.reason))
-        finally:
-            self.last = time.time()
-        if "login.yahoo.com" in final or "/login" in final.split("?")[0]:
-            raise RotoError("this league is not publicly viewable (Yahoo asked for a sign-in). Only public leagues can be read; "
-                            "a commissioner can turn on 'Make League Publicly Viewable' in the league settings.")
-        if path and keep:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(body)
+
+class Fetcher:
+    """GET with a polite delay, a few retries for failures that may pass, and an optional on-disk copy of slow-changing pages (`ttl` seconds)."""
+
+    def __init__(self, delay=1.5, cache=None, opener=None, sleep=time.sleep):
+        self.delay, self.cache, self.last = delay, cache, 0.0
+        self.opener, self.sleep = opener or urllib.request.urlopen, sleep
+
+    def _path(self, url):
+        return os.path.join(self.cache, hashlib.sha1(url.encode()).hexdigest() + ".html")
+
+    def get(self, url, ttl=None):
+        path = self._path(url) if self.cache and ttl else None
+        if path and os.path.exists(path) and time.time() - os.path.getmtime(path) < ttl:
+            try:
+                with open(path, encoding="utf-8") as f:
+                    return f.read()
+            except (OSError, ValueError):
+                pass                                                    # unreadable copy: fetch again
+        body = self._fetch(url)
+        if path:
+            write_atomic(path, body)
         return body
+
+    def _fetch(self, url):
+        problem = None
+        for attempt in range(RETRIES + 1):
+            if attempt:
+                self.sleep(BACKOFF[min(attempt - 1, len(BACKOFF) - 1)] if problem is None or problem[1] is None else problem[1])
+            wait = self.delay - (time.time() - self.last)
+            if wait > 0:
+                self.sleep(wait)
+            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html"})
+            try:
+                with self.opener(req, timeout=30) as r:
+                    body, final = r.read().decode("utf-8", "replace"), r.geturl()
+            except urllib.error.HTTPError as e:
+                retry_after = None
+                try:
+                    retry_after = min(int(e.headers.get("Retry-After", "")), 60) if e.headers else None
+                except (TypeError, ValueError):
+                    pass
+                if e.code in (403, 429, 999):
+                    problem = ("Yahoo refused the request (HTTP %s): it may be rate limiting or blocking this address; the next pass will try again" % e.code, retry_after)
+                elif e.code >= 500:
+                    problem = ("%s answered HTTP %s" % (url, e.code), retry_after)
+                else:
+                    raise RotoError("%s answered HTTP %s" % (url, e.code))
+                if e.code == 403:
+                    raise RotoError(problem[0])                          # a block will not clear in a few seconds: do not hammer
+            except (urllib.error.URLError, OSError) as e:                # timeouts and dropped connections
+                problem = ("could not reach %s (%s)" % (url, getattr(e, "reason", e)), None)
+            else:
+                if "login.yahoo.com" in final or "/login" in final.split("?")[0]:
+                    raise RotoError("this league is not publicly viewable (Yahoo asked for a sign-in). Only public leagues can be read; "
+                                    "a commissioner can turn on 'Make League Publicly Viewable' in the league settings.")
+                return body
+            finally:
+                self.last = time.time()
+        raise RotoError(problem[0])
 
 
 # ------------------------------------------------------------------ a tiny element tree
@@ -368,26 +409,34 @@ def _cache_path(cache, league, week):
     return os.path.join(cache, "%s-week-%d.json" % (league, week)) if cache else None
 
 
+# Stat corrections: Yahoo and the NBA fix box scores for a day or two after a game. A finished week is kept in the cache but checked again at these ages
+# (seconds since it was first stored): soon after, the next morning, and over the following two days. A changed total replaces the cached week and is recorded.
+CHECK_AGES = (3600, 6 * 3600, 24 * 3600, 48 * 3600)
+KEEP_CORRECTIONS = 14 * 86400
+
+
 def _cache_get(cache, league, week):
     p = _cache_path(cache, league, week)
     if p and os.path.exists(p):
-        with open(p, encoding="utf-8") as f:
-            d = json.load(f)
-        if d.get("v") != 2:                                             # an older file without Score / matchups: fetch again
-            return None
-        return {"week": week, "matchups": d["matchups"],
-                "teams": {int(t): {"name": r["name"], "score": _dec(r["score"]), "cols": {h: _dec(v) for h, v in r["cols"].items()}} for t, r in d["teams"].items()}}
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+            if d.get("v") not in (2, 3):                                # an older file without Score / matchups: fetch again
+                return None
+            meta = {"finalized": d.get("finalized", 0), "checks": d.get("checks", len(CHECK_AGES))}     # a v2 file predates re-checking: leave it alone
+            return {"week": week, "matchups": d["matchups"], "_meta": meta,
+                    "teams": {int(t): {"name": r["name"], "score": _dec(r["score"]), "cols": {h: _dec(v) for h, v in r["cols"].items()}} for t, r in d["teams"].items()}}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError, ZeroDivisionError):
+            print("note: the cached copy of week %s is damaged; fetching it again" % week, file=sys.stderr)        # never let one bad file stop a league for good
     return None
 
 
-def _cache_put(cache, league, wk):
+def _cache_put(cache, league, wk, finalized=None, checks=0):
     p = _cache_path(cache, league, wk["week"])
     if p:
-        os.makedirs(cache, exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump({"v": 2, "matchups": wk.get("matchups", []),
-                       "teams": {str(t): {"name": r["name"], "score": _enc(r.get("score")), "cols": {h: _enc(v) for h, v in r["cols"].items()}}
-                                 for t, r in wk["teams"].items()}}, f)
+        write_atomic(p, json.dumps({"v": 3, "finalized": time.time() if finalized is None else finalized, "checks": checks, "matchups": wk.get("matchups", []),
+                                    "teams": {str(t): {"name": r["name"], "score": _enc(r.get("score")), "cols": {h: _enc(v) for h, v in r["cols"].items()}}
+                                              for t, r in wk["teams"].items()}}))
 
 
 def collect_week(fx, league, week, team_ids, base):
@@ -411,32 +460,67 @@ def has_data(wk):
     return any(v is not None for rec in wk["teams"].values() for v in rec["cols"].values())
 
 
-def load(league, cache=None, delay=1.5, sport="nba", only_week=None, through=None):
+def week_changed(a, b):
+    """True when two reads of the same week differ in any team's total or Score."""
+    if set(a["teams"]) != set(b["teams"]):
+        return True
+    return any(a["teams"][t]["cols"] != b["teams"][t]["cols"] or a["teams"][t].get("score") != b["teams"][t].get("score") for t in a["teams"])
+
+
+def check_league(league):
+    """The league id goes into URLs and file names: digits only."""
+    if not re.fullmatch(r"[0-9]{1,12}", str(league)):
+        raise RotoError("the league id must be the number in the league's URL (digits only), got %r" % (league,))
+    return str(league)
+
+
+def load(league, cache=None, delay=1.5, sport="nba", only_week=None, through=None, now=None, fixes=None):
     """-> (settings, teams {id: name}, weeks_data [{week, teams}], in_progress_week or None). Weeks are read in order and the walk stops at the first
     week with no stats. A week is kept in the cache only once a later week has stats (it is then final); the newest week is always fetched again."""
+    league = check_league(league)
     base = "https://%s/%s" % (SPORTS[sport], league)
-    fx = Fetcher(delay=delay)
-    st = parse_settings(fx.get(base + "/settings"))
+    fx = Fetcher(delay=delay, cache=cache)
+    st = parse_settings(fx.get(base + "/settings", ttl=TTL["settings"]))
     if st["scoring"] is None and not st["categories"]:
         raise RotoError("could not read league %s's public settings: it does not exist or it is not publicly viewable (Yahoo shows a generic "
                         "error page). Only public leagues can be read; a commissioner can turn on 'Make League Publicly Viewable' in the settings." % league)
     if st["scoring"] and "Head-to-Head" not in st["scoring"]:
         raise RotoError("this league's scoring type is %r; only head-to-head leagues (weekly matchup pages) are supported" % st["scoring"])
-    teams = parse_teams(fx.get(base + "?lhst=stand"), league)
+    teams = parse_teams(fx.get(base + "?lhst=stand", ttl=TTL["standings"]), league)
     if len(teams) < 2:
         raise RotoError("could not read the teams from the standings page")
     ids = sorted(teams)
-    first = parse_week(fx.get("%s/matchup?date=totals&week=1&mid1=%d" % (base, ids[0])), league)
+    first = parse_week(fx.get("%s/matchup?date=totals&week=1&mid1=%d" % (base, ids[0]), ttl=TTL["weeks"]), league)
     all_weeks = first["weeks"] or [1]
     limit = min(only_week or 10 ** 6, through or 10 ** 6)
-    weeks_data = []
+    weeks_data, stored = [], set()
     for w in [x for x in all_weeks if x <= limit]:
-        wk = _cache_get(cache, league, w) or collect_week(fx, league, w, ids, base)
+        wk = _cache_get(cache, league, w)
+        if wk:
+            stored.add(w)
+        else:
+            wk = collect_week(fx, league, w, ids, base)
         if not has_data(wk):
             break
         weeks_data.append(wk)
-    for wk in weeks_data[:-1]:
-        _cache_put(cache, league, wk)                                   # final: a later week already has stats
+    t_now = time.time() if now is None else now
+    for i, wk in enumerate(weeks_data[:-1]):                            # final: a later week already has stats
+        if wk["week"] not in stored:
+            _cache_put(cache, league, wk, finalized=t_now)
+        elif cache and only_week is None and (wk.get("_meta") or {}).get("checks", len(CHECK_AGES)) < len(CHECK_AGES):
+            meta = wk["_meta"]
+            if t_now - meta["finalized"] >= CHECK_AGES[meta["checks"]]:      # due for another look: did Yahoo change anything?
+                try:
+                    fresh = collect_week(fx, league, wk["week"], ids, base)
+                except RotoError as e:                                   # the check is best effort: a failed look must not stop the report; it is tried again next pass
+                    print("note: could not re-check week %d (%s)" % (wk["week"], e), file=sys.stderr)
+                    continue
+                if has_data(fresh) and week_changed(wk, fresh):
+                    if fixes is not None:
+                        fixes.append({"week": wk["week"], "old": wk, "new": fresh, "at": t_now})
+                    weeks_data[i] = fresh
+                    wk = fresh
+                _cache_put(cache, league, wk, finalized=meta["finalized"], checks=meta["checks"] + 1)
     if only_week:
         weeks_data = [wk for wk in weeks_data if wk["week"] == only_week]
         if not weeks_data:
@@ -621,26 +705,106 @@ def _wval(cores, week, t, sp):
     return _plain(cat_value(c["tot"][t], sp))
 
 
-def report(league, cache=None, delay=1.5, sport="nba", now=None):
+SCHEMA_VERSION = 3          # 2 = the original report; 3 added the final-weeks snapshot, the champion and corrections. The page refuses a report newer than it knows.
+
+
+def configured_champion(league, root=None):
+    """The defending champion set for this league in leagues.json ("champions": {"<league id>": "<team name or team id>"}), or None."""
+    try:
+        with open(os.path.join(root or os.path.dirname(os.path.abspath(__file__)), "leagues.json"), encoding="utf-8") as f:
+            return (json.load(f).get("champions") or {}).get(str(league))
+    except (OSError, ValueError):
+        return None
+
+
+def resolve_champion(spec, names):
+    """A team id (as a number or text) or a team name (any case, extra spaces ignored) -> the team id in `names` ({id: name}), or None. Never raises: no match means no crown."""
+    if spec is None or str(spec).strip() == "":
+        return None
+    spec = str(spec).strip()
+    if spec.isdigit() and int(spec) in names:
+        return int(spec)
+    hits = [t for t, n in names.items() if " ".join(str(n).split()).casefold() == " ".join(spec.split()).casefold()]
+    if len(hits) != 1:
+        print("note: champion %r %s; no crown shown" % (spec, "matches %d teams" % len(hits) if hits else "not found among the team names"), file=sys.stderr)
+        return None
+    return hits[0]
+
+
+def _result(sc, osc):
+    return None if sc is None or osc is None else "W" if sc > osc else "L" if sc < osc else "T"
+
+
+def correction_event(fix, specs):
+    """One re-read of a finished week that came back different -> {"week", "at", "changes", "rank", "flips"} in the terms the page shows, or None when no
+    scoring category moved. changes: category totals that moved; rank: teams whose roto rank for that week changed; flips: matchups whose result changed."""
+    old, new = fix["old"], fix["new"]
+    changes = []
+    for tid in sorted(new["teams"]):
+        for sp in specs:
+            ov = cat_value(old["teams"].get(tid, {}).get("cols", {}), sp)
+            nv = cat_value(new["teams"][tid]["cols"], sp)
+            if ov is not None and nv is not None and ov != nv:
+                changes.append({"team": tid, "cat": sp["cat"], "old": _plain(ov), "new": _plain(nv)})
+    if not changes:
+        return None
+    oc, nc = _core(old, specs)["res"], _core(new, specs)["res"]
+    rank = [{"team": t, "old": oc[t]["rank"], "new": nc[t]["rank"]} for t in sorted(nc) if t in oc and oc[t]["rank"] != nc[t]["rank"]]
+    flips = []
+    for a, b in new.get("matchups", []):
+        for x, y in ((a, b), (b, a)):
+            before = _result(old["teams"].get(x, {}).get("score"), old["teams"].get(y, {}).get("score"))
+            after = _result(new["teams"].get(x, {}).get("score"), new["teams"].get(y, {}).get("score"))
+            if before and after and before != after:
+                flips.append({"team": x, "opp": y, "old": before, "new": after})
+    return {"week": new["week"], "at": int(fix["at"]), "changes": changes, "rank": rank, "flips": flips}
+
+
+def update_corrections(cache, league, events, now):
+    """Corrections stay on the report for 14 days: they are kept next to the cached weeks (which the live workflow carries between runs)."""
+    p = os.path.join(cache, "%s-corrections.json" % league) if cache else None
+    kept = []
+    if p and os.path.exists(p):
+        try:
+            with open(p, encoding="utf-8") as f:
+                kept = json.load(f)
+        except (OSError, ValueError):
+            kept = []
+    have = {(e["week"], e["at"]) for e in kept}
+    kept = [e for e in kept + [e for e in events if (e["week"], e["at"]) not in have] if now - e["at"] <= KEEP_CORRECTIONS]
+    if p:
+        write_atomic(p, json.dumps(kept, separators=(",", ":")))
+    return sorted(kept, key=lambda e: -e["at"])
+
+
+def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
     """The whole report: one view for the season and one per week that has stats, plus the season composites (what the page and the PNGs are drawn from)."""
     import datetime
-    st, teams, weeks_data, _base = load(league, cache, delay, sport)
+    when = now or datetime.datetime.now(datetime.timezone.utc)
+    t_now = when.timestamp()                                              # the one clock: everything time-based below uses it
+    fixes = []
+    st, teams, weeks_data, _base = load(league, cache, delay, sport, now=t_now, fixes=fixes)
     headers = list(next(iter(weeks_data[0]["teams"].values()))["cols"])
     cats = st["categories"] or [h for h in headers if h and not h.endswith("M/A*")]
     specs, skipped = plan(cats, headers)
     if not specs:
         raise RotoError("none of the league's categories (%s) can be computed from the matchup pages" % ", ".join(cats))
+    corrections = update_corrections(cache, league, [e for e in (correction_event(f, specs) for f in fixes) if e], t_now)
     names = {t: teams.get(t) or next((wk["teams"][t]["name"] for wk in weeks_data if t in wk["teams"]), str(t)) for t in teams}
     ids = sorted(teams)
     cores = [_core(wk, specs) for wk in weeks_data]
     views = {"season": _season_view(cores, weeks_data, specs, ids)}
+    done = len(weeks_data) - 1                                           # the newest week is still being played: the "final" snapshot leaves it out
+    if done >= 1:
+        views["seasonFinal"] = _season_view(cores[:done], weeks_data[:done], specs, ids)
     for wk, c in zip(weeks_data, cores):
         views["w%d" % wk["week"]] = _week_view(c, wk, specs, ids)
-    when = now or datetime.datetime.now(datetime.timezone.utc)
-    return {"schema": "yahoo-roto-report/2", "league": str(league), "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    champ = resolve_champion(champion if champion is not None else configured_champion(league), names)
+    return {"schema": "yahoo-roto-report/2", "schemaVersion": SCHEMA_VERSION, "league": str(league), "champion": champ, "corrections": corrections, "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "inProgressWeek": weeks_data[-1]["week"], "categories": [{"cat": sp["cat"], "lower": sp["lower"], "pct": sp["kind"] == "pct"} for sp in specs],
             "skipped": skipped, "teams": {str(t): names[t] for t in names}, "weeks": [wk["week"] for wk in weeks_data], "views": views,
-            "composites": composites(weeks_data, cores, specs, ids, views["season"])}
+            "composites": composites(weeks_data, cores, specs, ids, views["season"]),
+            "compositesFinal": composites(weeks_data[:done], cores[:done], specs, ids, views["seasonFinal"]) if done >= 1 else None}
 
 
 def run(league, week=None, through=None, cache=None, delay=1.5, sport="nba", out=print):
@@ -698,7 +862,7 @@ def write_html(doc, out_dir):
     here = os.path.dirname(os.path.abspath(__file__))
     with open(os.path.join(here, "index.html"), encoding="utf-8") as f:
         page = f.read()
-    blob = json.dumps(doc, ensure_ascii=False).replace("</", "<\\/")
+    blob = json.dumps(doc, ensure_ascii=False).replace("<", "\\u003c")             # no "<" at all: a team name like "<!--<script" cannot open a comment or close the script
     page = page.replace("<script>\n(function(){", "<script>window.__REPORT__=%s;</script>\n<script>\n(function(){" % blob, 1)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "index.html")
@@ -757,6 +921,7 @@ def main(argv=None):
     ap.add_argument("--sport", default="nba", choices=sorted(SPORTS), help="default nba (categories and pages are verified for NBA only)")
     ap.add_argument("--cache", help="directory to keep fetched pages in")
     ap.add_argument("--delay", type=float, default=1.5, help="seconds between requests (default 1.5)")
+    ap.add_argument("--champion", help="the defending champion (team name or team id) to mark with a crown; default: leagues.json \"champions\"")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--report", metavar="DIR", help="write DIR/report.json and a self-contained DIR/index.html (all weeks, all three views)")
     ap.add_argument("--png", action="store_true", help="with --report: also draw DIR/roto.png, stats.png, allplay.png of the current week (needs Chrome); --week N for another week")
@@ -764,7 +929,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     try:
         if a.report:
-            doc = report(a.league, a.cache, a.delay, a.sport)
+            doc = report(a.league, a.cache, a.delay, a.sport, champion=a.champion)
             path = write_html(doc, a.report)
             print("wrote %s and report.json (weeks %s, week %d in progress)" % (path, ", ".join(map(str, doc["weeks"])), doc["inProgressWeek"]))
             if a.png:
