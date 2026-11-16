@@ -1,5 +1,6 @@
 """Playoff odds: reading the playoff setup, divisions and future pairings from the pages, and the rest-of-season simulation."""
 import json
+import math
 import os
 import sys
 import tempfile
@@ -160,6 +161,171 @@ class Accuracy(unittest.TestCase):
             self.assertAlmostEqual(res[t]["playoff"], exact[t], delta=0.012, msg="team %d" % t)
 
 
+def weeks_of(values_by_week, col="PTS", pairs=None):
+    """Matchup-page style weeks for a one-category league: values_by_week = [{team: value}] per week; pairs = [[(a, b), ...]] per week (default: none)."""
+    out = []
+    for i, vals in enumerate(values_by_week, 1):
+        out.append({"week": i, "teams": {t: {"name": str(t), "cols": {col: yr.Fraction(v)}, "score": None} for t, v in vals.items()}, "matchups": [list(p) for p in (pairs[i - 1] if pairs else [])]})
+    return out
+
+
+def rotation(ids, week):
+    """A different pairing every week (everyone plays once)."""
+    order = ids[:]
+    order = order[week % len(order):] + order[:week % len(order)]
+    return [(order[i], order[-1 - i]) for i in range(len(order) // 2)]
+
+
+class StrengthUncertainty(unittest.TestCase):
+    SPEC = [{"cat": "PTS", "kind": "count", "col": "PTS", "lower": False}]
+
+    def test_shrinkage_and_standard_error_follow_the_leagues_own_spread(self):
+        ids = [1, 2, 3, 4]
+        weeks = weeks_of([{1: 110, 2: 100, 3: 90, 4: 100}, {1: 120, 2: 96, 3: 94, 4: 98}, {1: 100, 2: 104, 3: 86, 4: 102}])
+        st = yr.strengths(weeks, self.SPEC, ids)["PTS"]
+        avg = {1: 110.0, 2: 100.0, 3: 90.0, 4: 100.0}
+        mu = sum(avg.values()) / 4
+        sd2 = sum((x - avg[t]) ** 2 for wk in weeks for t, x in ((t, float(wk["teams"][t]["cols"]["PTS"])) for t in ids)) / (12 - 4)
+        within = 0
+        for t in ids:
+            within += sum((float(wk["teams"][t]["cols"]["PTS"]) - avg[t]) ** 2 for wk in weeks)
+        sd2 = within / (12 - 4)
+        between = sum((avg[t] - mu) ** 2 for t in ids) / 3
+        tau2 = max(between - sd2 / 3, 0.1 * between)
+        w = tau2 / (tau2 + sd2 / 3)
+        for t in ids:
+            self.assertAlmostEqual(st["mean"][t], mu + w * (avg[t] - mu), places=9)
+            self.assertAlmostEqual(st["se"][t], math.sqrt(w * sd2 / 3), places=9)
+        self.assertAlmostEqual(st["sd"], math.sqrt(sd2), places=9)
+        self.assertLess(abs(st["mean"][1] - mu), abs(avg[1] - mu))                                 # pulled toward the league average
+
+    def test_with_many_weeks_the_estimates_stand_on_their_own(self):
+        ids = [1, 2, 3, 4]
+        base = {1: 120, 2: 105, 3: 95, 4: 80}
+        weeks = weeks_of([{t: v + (-1) ** (i + t) * 3 for t, v in base.items()} for i in range(60)])
+        st = yr.strengths(weeks, self.SPEC, ids)["PTS"]
+        for t in ids:
+            self.assertAlmostEqual(st["mean"][t], base[t], delta=1.0)                               # hardly shrunk after 60 weeks
+            self.assertLess(st["se"][t], 1.0)                                                       # and sure of itself
+
+    def test_no_se_means_no_uncertainty_and_the_old_fixed_pull_is_still_available(self):
+        ids = [1, 2, 3, 4]
+        weeks = weeks_of([{1: 110, 2: 100, 3: 90, 4: 100}, {1: 120, 2: 96, 3: 94, 4: 98}])
+        old = yr.strengths(weeks, self.SPEC, ids, eb=False)["PTS"]
+        self.assertEqual(set(old["se"].values()), {0.0})
+        mu = sum(float(wk["teams"][t]["cols"]["PTS"]) for wk in weeks for t in ids) / 8
+        self.assertAlmostEqual(old["mean"][1], (230 + yr.PRIOR_WEEKS * mu) / (2 + yr.PRIOR_WEEKS), places=9)
+
+    def test_a_few_weeks_of_a_clear_leader_no_longer_look_certain(self):
+        ids = list(range(1, 9))
+        st = flat_strength(ids, mean={1: 106.0, 2: 94.0}, sd=10.0)
+        sure = yr.simulate(st, ids, {t: 0.0 for t in ids}, [None] * 6, spots=3, sims=6000)
+        for c in st.values():
+            c["se"] = {t: 8.0 for t in ids}                                                          # the same strengths, but only a few weeks behind them
+        unsure = yr.simulate(st, ids, {t: 0.0 for t in ids}, [None] * 6, spots=3, sims=6000)
+        self.assertGreater(unsure[1]["playoff"], 0.7)                                               # still the favourite
+        self.assertLess(unsure[1]["playoff"], sure[1]["playoff"] - 0.03)                            # but less sure
+        self.assertGreater(unsure[2]["playoff"], sure[2]["playoff"])                                # and the weakest team gets a chance
+        self.assertGreater(unsure[1]["first"], unsure[3]["first"])                                  # the order by strength is kept
+
+    def test_the_run_is_repeatable_reports_its_noise_and_is_fast_enough(self):
+        import time
+        ids = list(range(1, 19))
+        st = flat_strength(ids, mean={t: 100.0 + 2 * (t % 7) for t in ids}, cats=9, sd=10.0)
+        for c in st.values():
+            c["se"] = {t: 3.0 for t in ids}
+        stats = {}
+        t0 = time.time()
+        a = yr.simulate(st, ids, {t: 0.0 for t in ids}, [None] * 15, spots=6, sims=50000, seed=4, stats=stats)
+        self.assertLess(time.time() - t0, 12)                                                       # fifteen weeks left, fifty thousand seasons
+        self.assertTrue(0 < stats["margin"] < 3, stats)
+        self.assertEqual(a, yr.simulate(st, ids, {t: 0.0 for t in ids}, [None] * 15, spots=6, sims=50000, seed=4))
+        self.assertAlmostEqual(sum(r["playoff"] for r in a.values()), 6, places=6)
+
+
+class Backtest(unittest.TestCase):
+    def test_counts_and_scores_match_an_independent_computation_on_the_golden_league(self):
+        import itertools
+        fx, orig = golden.FakeFetcher(golden.build_pages(18, 5, 7)), yr.Fetcher
+        yr.Fetcher = lambda **k: fx
+        try:
+            st0, teams, wd, _ = yr.load("9", None, 0, "nba")
+        finally:
+            yr.Fetcher = orig
+        headers = list(next(iter(wd[0]["teams"].values()))["cols"])
+        specs, _ = yr.plan(st0["categories"] or [h for h in headers if h and not h.endswith("M/A*")], headers)
+        done = wd[:4]
+        bt = yr.backtest(done, specs, sorted(teams))
+        self.assertEqual(bt["games"], 3 * 9)                                                     # weeks 2-4, nine matchups each
+        self.assertEqual([w["week"] for w in bt["weeks"]], [2, 3, 4])
+        self.assertEqual(sum(b["games"] for b in bt["bins"]), bt["games"])
+        self.assertTrue(0 < bt["brier"] < 1 and 0 <= bt["favouriteWon"] <= 1 and bt["baseline"] == 0.25)
+        # independent: forecast week 3 from weeks 1-2 with the 512 win/loss patterns of nine categories
+        ids = sorted(teams)
+        st = yr.strengths(done[:2], specs, ids)
+        wk = done[2]
+        tot = yr.totals([wk], wk["teams"])
+        brier = []
+        for a, b in wk["matchups"]:
+            ps = []
+            for sp in specs:
+                c = st[sp["cat"]]
+                z = (c["mean"][a] - c["mean"][b]) / math.sqrt(2 * c["sd"] ** 2 + c["se"][a] ** 2 + c["se"][b] ** 2)
+                ps.append(yr._phi(-z if c["lower"] else z))
+            p = 0.0
+            for pattern in itertools.product((0, 1), repeat=len(ps)):
+                if sum(pattern) > len(ps) / 2:
+                    q = 1.0
+                    for won, pc in zip(pattern, ps):
+                        q *= pc if won else 1 - pc
+                    p += q
+            res = yr.head_to_head(tot[a], tot[b], specs)
+            y = 1.0 if res[0] > res[1] else 0.0 if res[0] < res[1] else 0.5
+            if p < 0.5:
+                p, y = 1 - p, 1 - y
+            brier.append((p - y) ** 2)
+        week3 = next(w for w in bt["weeks"] if w["week"] == 3)
+        self.assertAlmostEqual(week3["brier"], sum(brier) / len(brier), places=3)
+
+    def test_no_forecast_is_possible_from_a_single_week(self):
+        weeks = weeks_of([{1: 100, 2: 90, 3: 80, 4: 70}], pairs=[[(1, 2), (3, 4)]])
+        self.assertIsNone(yr.backtest(weeks, StrengthUncertainty.SPEC, [1, 2, 3, 4]))
+
+    def test_when_strength_decides_matchups_the_favourites_win(self):
+        ids = list(range(1, 9))
+        weeks = weeks_of([{t: 100 + 15 * t + (3 if (t + w) % 2 else -3) for t in ids} for w in range(8)], pairs=[rotation(ids, w) for w in range(8)])
+        bt = yr.backtest(weeks, StrengthUncertainty.SPEC, ids)
+        self.assertEqual(bt["games"], 7 * 4)
+        self.assertGreaterEqual(bt["favouriteWon"], 0.9)
+        self.assertLess(bt["brier"], 0.25)                                                       # better than a coin flip
+
+    def test_recent_weeks_count_more_only_when_that_forecasts_better(self):
+        ids = list(range(1, 9))
+        pairs = [rotation(ids, w) for w in range(14)]
+        stable = weeks_of([{t: 100 + 8 * t + ((t * 7 + w * 3) % 5 - 2) * 4 for t in ids} for w in range(14)], pairs=pairs)
+        flipped = weeks_of([{t: 100 + 8 * (t if w < 7 else 9 - t) + ((t * 7 + w * 3) % 5 - 2) * 4 for t in ids} for w in range(14)], pairs=pairs)
+        self.assertEqual(yr.choose_half_life(stable[:4], StrengthUncertainty.SPEC, ids), (None, {}))      # too few weeks to tell
+        hl, tested = yr.choose_half_life(flipped, StrengthUncertainty.SPEC, ids)
+        self.assertIsNotNone(hl)                                                                  # teams changed: the recent weeks win
+        self.assertLess(tested[str(int(hl))], tested["equal"])
+        self.assertIsNone(yr.choose_half_life(stable, StrengthUncertainty.SPEC, ids)[0])           # steady teams: equal weights stay
+
+    def test_equal_weights_are_the_default_and_a_half_life_favours_recent_weeks(self):
+        ids = [1, 2]
+        weeks = weeks_of([{1: 100, 2: 100}, {1: 100, 2: 100}, {1: 100, 2: 120}])
+        eq = yr.strengths(weeks, StrengthUncertainty.SPEC, ids, eb=False)["PTS"]["mean"]
+        recent = yr.strengths(weeks, StrengthUncertainty.SPEC, ids, half_life=1, eb=False)["PTS"]["mean"]
+        self.assertGreater(recent[2], eq[2])                                                      # the latest week counts more
+
+    def test_the_report_carries_accuracy_and_the_model_used(self):
+        doc = golden.build_report(18, 5, regular=10)
+        o = doc["odds"]
+        self.assertEqual(o["accuracy"]["games"], 3 * 9)
+        self.assertEqual(o["model"]["version"], 2)
+        self.assertIsNone(o["model"]["halfLife"])                                                 # four finished weeks: equal weights
+        self.assertIsNone(golden.build_report(18, 2, regular=10)["odds"]["accuracy"])             # a single finished week: nothing to forecast yet
+
+
 class History(unittest.TestCase):
     def test_the_odds_after_each_finished_week_are_kept_and_end_where_the_odds_are_now(self):
         with tempfile.TemporaryDirectory() as d:
@@ -177,13 +343,13 @@ class History(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             golden.build_report(18, 4, regular=10, cache=d)
             real, sims = yr.simulate, []
-            yr.simulate = lambda *a, **k: (sims.append(k.get("sims", yr.SIMS)), real(*a, **k))[1]
+            yr.simulate = lambda *a, **k: (sims.append("current" if "stats" in k else "history"), real(*a, **k))[1]
             try:
                 golden.build_report(18, 5, regular=10, cache=d)
             finally:
                 yr.simulate = real
-            self.assertEqual(sims.count(yr.SIMS), 1)                                                  # the current odds, once
-            self.assertEqual(sims.count(yr.HIST_SIMS), 1)                                             # only the newly finished week: the earlier snapshots were remembered
+            self.assertEqual(sims.count("current"), 1)                                                # the current odds, once
+            self.assertEqual(sims.count("history"), 1)                                             # only the newly finished week: the earlier snapshots were remembered
 
     def test_the_history_is_repeatable(self):
         a = golden.build_report(18, 4, regular=10)["odds"]["history"]
@@ -193,7 +359,7 @@ class History(unittest.TestCase):
 class InTheReport(unittest.TestCase):
     def test_the_report_carries_odds_when_the_league_states_its_playoffs(self):
         with tempfile.TemporaryDirectory() as d:
-            doc = golden.build_report(18, 4, regular=10, divisions=True, cache=d)
+            doc = golden.build_report(18, 4, regular=10, divisions=True, cache=d, fast=False)
             o = doc["odds"]
             self.assertEqual((o["spots"], o["regularWeeks"], o["remaining"]), (6, 10, [4, 5, 6, 7, 8, 9, 10]))
             self.assertTrue(o["divisionWinners"])
@@ -203,7 +369,8 @@ class InTheReport(unittest.TestCase):
             self.assertEqual(len(o["teams"]["1"]["dist"]), 18)
             self.assertEqual((o["sims"], o["scheduleWeeks"], o["complete"]), (50000, 7, True))     # the whole schedule is read in the first pass
             self.assertEqual(sorted(map(int, o["schedule"])), [4, 5, 6, 7, 8, 9, 10])                   # the pairings still to come travel with the report
-            self.assertAlmostEqual(o["margin"], 0.44, places=2)
+            self.assertTrue(0 < o["margin"] < 3, o["margin"])                                         # the simulation noise, measured between batches (percentage points)
+            self.assertEqual(o["model"]["version"], 2)
             with open(os.path.join(d, "9-schedule.json")) as f:
                 self.assertEqual(len(json.load(f)), 6)                                              # the pairings of the six future weeks were remembered
 
@@ -218,12 +385,12 @@ class InTheReport(unittest.TestCase):
             first = golden.build_report(18, 4, regular=10, cache=d)["odds"]
             real = yr.simulate
             calls = []
-            yr.simulate = lambda *a, **k: (calls.append(k.get("sims", yr.SIMS)), real(*a, **k))[1]
+            yr.simulate = lambda *a, **k: (calls.append("current" if "stats" in k else "history"), real(*a, **k))[1]
             try:
                 again = golden.build_report(18, 4, regular=10, cache=d)["odds"]
                 self.assertEqual((again, calls), (first, []))                                       # same data: no simulation
                 golden.build_report(18, 5, regular=10, cache=d)
-                self.assertEqual(calls.count(yr.SIMS), 1)                                           # one more week finished: the odds are simulated again
+                self.assertEqual(calls.count("current"), 1)                                           # one more week finished: the odds are simulated again
             finally:
                 yr.simulate = real
 

@@ -72,7 +72,18 @@ def build_pages(n=18, weeks=4, seed=7, regular=None, divisions=False, spots=6):
     return pages
 
 
-def build_report(n=18, weeks=4, seed=7, champion="sup fam", cache=None, drop=(), **kw):
+def build_report(n=18, weeks=4, seed=7, champion="sup fam", cache=None, drop=(), fast=True, **kw):
+    """`fast` runs the playoff simulation with fewer seasons (tests that check the real settings pass fast=False)."""
+    saved = (yr.SIMS, yr.STRENGTH_DRAWS, yr.HIST_SIMS)
+    if fast:
+        yr.SIMS, yr.STRENGTH_DRAWS, yr.HIST_SIMS = 10000, 500, 2000
+    try:
+        return _build_report(n, weeks, seed, champion, cache, drop, **kw)
+    finally:
+        yr.SIMS, yr.STRENGTH_DRAWS, yr.HIST_SIMS = saved
+
+
+def _build_report(n, weeks, seed, champion, cache, drop, **kw):
     pages = build_pages(n, weeks, seed, **kw)
     for k in [k for k in pages if any(k.startswith("week=%d&" % w) for w in drop)]:         # weeks whose pages cannot be read
         del pages[k]
