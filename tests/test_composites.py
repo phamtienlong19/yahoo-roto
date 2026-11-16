@@ -226,7 +226,7 @@ class Shape(unittest.TestCase):
         w1 = doc["views"]["w1"]
         self.assertEqual(w1["matchups"], [[1, 2]])
         self.assertEqual((w1["teams"]["1"]["score"], w1["teams"]["2"]["score"]), (1, 0))
-        self.assertEqual(sorted(w1["teams"]["1"]), ["allPlay", "points", "rank", "score", "total", "values", "winPct"])
+        self.assertEqual(sorted(w1["teams"]["1"]), ["allPlay", "points", "rank", "raw", "score", "total", "values", "winPct"])
         self.assertEqual(sorted(doc["views"]["season"]["teams"]["1"]), ["allPlay", "points", "rank", "total", "values", "winPct"])
         self.assertEqual(doc["composites"]["realRecord"]["1"]["record"], [1, 1, 0])
         import json
