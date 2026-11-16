@@ -40,6 +40,7 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p=await load('season=1&board=luck&lens=catweek&cat=PTS&range=2-3');R.cwPickH1=txt(p.d.querySelector('h1'));R.cwPickCells=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr:first-child td')).map(txt);
  p=await load('season=1&board=catluck');R.clH1=txt(p.d.querySelector('h1'));R.clHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
  p=await load('season=1&board=boom','old/');R.oldNote=txt(p.d.querySelector('.snapbar .rnote'));R.oldSelects=p.d.querySelectorAll('.snapbar select').length;R.oldChips=p.d.querySelectorAll('.snapbar .seg button').length;
+ p=await load('season=1&board=luck&range=4-4');R.oneWeek=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).map(function(r){return [r.cells[1].className.replace('cat ',''),r.cells[2].className.replace('total sep ','')]});
  p=await load('season=1&board=matchlog&range=1-3');R.mlRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.mlH1=txt(p.d.querySelector('h1'));
  p=await load('week=4&view=stats');
  var heads=[].slice.call(p.d.querySelectorAll('.st thead tr:last-child th')),ix=heads.map(txt).indexOf('PTS');
@@ -136,6 +137,11 @@ class Browser(unittest.TestCase):
         self.assertIn("after the next data refresh", self.R["oldNote"])
         self.assertEqual((self.R["oldSelects"], self.R["oldChips"]), (0, 2))              # the two preset ranges still work
 
+    def test_a_one_week_range_colours_the_total_like_the_week_cell(self):
+        self.assertEqual(len(self.R["oneWeek"]), 18)
+        for week_cell, total_cell in self.R["oneWeek"]:
+            self.assertEqual(week_cell, total_cell)
+
     def test_matchup_log_has_a_row_per_team_and_week(self):
         self.assertEqual(self.R["mlRows"], 3 * 18)
         self.assertIn("Weeks 1-3", self.R["mlH1"])
@@ -148,8 +154,10 @@ class Browser(unittest.TestCase):
     def test_the_crown_the_opponent_line_and_the_score_colours(self):
         self.assertEqual(self.R["crowns"], 1)
         self.assertEqual(self.R["vs"], 18)
-        self.assertTrue(set(self.R["scoreClasses"]) <= {"green-strong", "red-strong", "mid"})
-        self.assertIn("green-strong", self.R["scoreClasses"])
+        shades = {"dark-green", "green", "light-green", "white", "light-red", "red", "dark-red", "mid"}      # the All-Play Matrix margin shades
+        self.assertTrue(set(self.R["scoreClasses"]) <= shades, self.R["scoreClasses"])
+        self.assertGreaterEqual(len(set(self.R["scoreClasses"])), 3)                                     # margins of different size get different shades
+        self.assertTrue({"light-green", "green", "dark-green"} & set(self.R["scoreClasses"]))
 
     def test_clicking_a_header_sorts_both_ways_and_the_matrix_sorts_by_win_percent(self):
         self.assertTrue(self.R["sortDesc"])
