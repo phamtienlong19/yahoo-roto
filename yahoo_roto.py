@@ -19,9 +19,12 @@ display-only: it is not a Yahoo number. Be polite: one request per 1.5 s by defa
 from __future__ import annotations
 
 import argparse
+import bisect
 import hashlib
 import json
+import math
 import os
+import random
 import re
 import sys
 import time
@@ -190,8 +193,11 @@ def parse_settings(html):
     cats = re.findall(r"\(([A-Z0-9%/+\-]+)\)", c.group(1)) if c else []
     pub = re.search(r"Make League Publicly Viewable:\s*(Yes|No)", t)
     nm = re.search(r"League Name:\s*(.+?)\s+(?:League Logo|Auto-renew|Custom|Draft|Scoring Type|Max )", t)
+    po = re.search(r"Playoffs:\s*(\d+)\s*teams?\s*-\s*Weeks?\s*(\d+)", t)            # "Playoffs: 6 teams - Week 19, 20 and 21": the regular season ends the week before
+    seeding = re.search(r"Playoff Seeding Options:\s*(.+?)\s+(?:Lock Benched|IL-eligible|Make League|Invite)", t)
     return {"scoring": m.group(1).strip() if m else None, "categories": cats, "public": (pub.group(1) == "Yes") if pub else None,
-            "name": nm.group(1).strip() if nm else None}
+            "name": nm.group(1).strip() if nm else None, "playoff_teams": int(po.group(1)) if po else None, "playoff_start": int(po.group(2)) if po else None,
+            "div_winners": bool(seeding and "Division winners advance" in seeding.group(1))}
 
 
 def parse_teams(html, league):
@@ -204,6 +210,20 @@ def parse_teams(html, league):
         for a in tb.find_all(lambda e: e.tag == "a" and re.search(r"/%s/(\d+)/?$" % re.escape(str(league)), e.attrs.get("href", "")) and e.text()):
             out.setdefault(int(re.search(r"/(\d+)/?$", a.attrs["href"]).group(1)), a.text())
     return out
+
+
+def parse_divisions(html, league):
+    """{teamId: division name} from the standings page, where each division is a heading (<h4>) above its rows; {} when the league has no divisions."""
+    out, cur = {}, None
+    for part in re.split(r"(<h4[^>]*>.*?</h4>)", html, flags=re.S):
+        m = re.fullmatch(r"<h4[^>]*>(.*?)</h4>", part, re.S)
+        if m:
+            cur = " ".join(re.sub(r"<[^>]+>", " ", m.group(1)).split())
+            continue
+        if cur is not None:
+            for tid in re.findall(r'href="[^"]*/%s/(\d+)/?"' % re.escape(str(league)), part):
+                out.setdefault(int(tid), cur)
+    return out if len(set(out.values())) > 1 else {}
 
 
 def _num(s):
@@ -486,7 +506,9 @@ def load(league, cache=None, delay=1.5, sport="nba", only_week=None, through=Non
                         "error page). Only public leagues can be read; a commissioner can turn on 'Make League Publicly Viewable' in the settings." % league)
     if st["scoring"] and "Head-to-Head" not in st["scoring"]:
         raise RotoError("this league's scoring type is %r; only head-to-head leagues (weekly matchup pages) are supported" % st["scoring"])
-    teams = parse_teams(fx.get(base + "?lhst=stand", ttl=TTL["standings"]), league)
+    stand = fx.get(base + "?lhst=stand", ttl=TTL["standings"])
+    teams = parse_teams(stand, league)
+    st["divisions"] = {t: d for t, d in parse_divisions(stand, league).items() if t in teams}
     if len(teams) < 2:
         raise RotoError("could not read the teams from the standings page")
     ids = sorted(teams)
@@ -707,7 +729,178 @@ def _wval(cores, week, t, sp):
     return _plain(cat_value(c["tot"][t], sp))
 
 
-SCHEMA_VERSION = 3          # 2 = the original report; 3 added the final-weeks snapshot, the champion and corrections. Additive fields (like each week's made/attempts, `raw`) do not bump it: the page feature-detects them. The page refuses a report newer than it knows.
+# ------------------------------------------------------------------ playoff odds
+SIMS = 8000                    # simulated rest-of-seasons; the figures are accurate to about +-1 percentage point
+PRIOR_WEEKS = 2                # a team's weekly average counts as this many weeks of league-average play too (early in the season a few weeks say little)
+SCHEDULE_PAGES_PER_PASS = 30   # future pairings are fetched gradually and remembered (an 18-team league needs 9 pages per week)
+SCHEDULE_REFRESH = 24 * 3600
+
+
+def _phi(x):
+    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+
+def schedule_path(cache, league):
+    return os.path.join(cache, "%s-schedule.json" % league) if cache else None
+
+
+def load_schedule(cache, league):
+    """{week: {"at": time fetched, "pairs": [[a, b], ...]}} remembered from earlier passes; {} when there is none or it is damaged."""
+    p = schedule_path(cache, league)
+    try:
+        with open(p, encoding="utf-8") as f:
+            d = json.load(f)
+        return {int(w): v for w, v in d.items() if isinstance(v, dict) and isinstance(v.get("pairs"), list)} if isinstance(d, dict) else {}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
+
+
+def fetch_schedule(fx, league, base, ids, weeks, cache, now, budget=SCHEDULE_PAGES_PER_PASS):
+    """Who plays whom in the given future weeks: Yahoo shows the pairing on a week's matchup page before the week starts. Pairings are remembered in the cache and
+    re-read after a day; at most `budget` pages are fetched per pass, missing weeks first. -> {week: [[a, b], ...]} for the weeks known so far (a failure only means fewer)."""
+    sched = load_schedule(cache, league)
+    todo = sorted((w for w in weeks if w not in sched or now - sched[w]["at"] >= SCHEDULE_REFRESH), key=lambda w: (w in sched, sched.get(w, {}).get("at", 0), w))
+    used, changed = 0, False
+    for w in todo:
+        if used + len(ids) // 2 > budget:                               # a week is read whole or not at all
+            break
+        pairs, seen = [], set()
+        try:
+            for t in ids:
+                if t in seen:
+                    continue
+                used += 1
+                got = parse_week(fx.get("%s/matchup?date=totals&week=%d&mid1=%d" % (base, w, t)), league)
+                if len(got["pair"]) != 2 or (got["week"] not in (None, w)):
+                    raise RotoError("no pairing shown for week %d" % w)
+                seen.update(got["pair"])
+                pairs.append(sorted(got["pair"]))
+        except RotoError as e:
+            print("note: could not read the schedule for week %d (%s)" % (w, e), file=sys.stderr)
+            break
+        sched[w] = {"at": now, "pairs": pairs}
+        changed = True
+    if changed and cache:
+        write_atomic(schedule_path(cache, league), json.dumps({str(w): v for w, v in sched.items()}, separators=(",", ":")))
+    return {w: sched[w]["pairs"] for w in weeks if w in sched}
+
+
+def strengths(weeks_data, specs, ids):
+    """Per category: {team: weekly mean, shrunk toward the league mean} and the weekly spread (sd, the same for every team). Only finished weeks are passed in."""
+    out = {}
+    for sp in specs:
+        per = {t: [] for t in ids}
+        for wk in weeks_data:
+            tot = totals([wk], ids)
+            for t in ids:
+                v = cat_value(tot.get(t, {}), sp)
+                if v is not None:
+                    per[t].append(float(v))
+        allv = [x for xs in per.values() for x in xs]
+        if not allv:
+            continue
+        mu = sum(allv) / len(allv)
+        ss = sum((x - sum(xs) / len(xs)) ** 2 for xs in per.values() if xs for x in xs)
+        dof = len(allv) - sum(1 for xs in per.values() if xs)
+        sd = math.sqrt(ss / dof) if dof > 0 else math.sqrt(sum((x - mu) ** 2 for x in allv) / len(allv))
+        sd = sd or 1e-9
+        means = {t: (sum(xs) + PRIOR_WEEKS * mu) / (len(xs) + PRIOR_WEEKS) if xs else mu for t, xs in per.items()}
+        out[sp["cat"]] = {"mean": means, "sd": sd, "lower": sp["lower"]}
+    return out
+
+
+def cat_win_distribution(a, b, st):
+    """P(team a wins exactly k of the categories against b), k = 0..ncat: each category is a normal-difference chance, combined exactly."""
+    dist = [1.0]
+    for c in st.values():
+        z = (c["mean"][a] - c["mean"][b]) / (c["sd"] * math.sqrt(2))
+        p = _phi(-z if c["lower"] else z)
+        new = [0.0] * (len(dist) + 1)
+        for k, q in enumerate(dist):
+            new[k] += q * (1 - p)
+            new[k + 1] += q * p
+        dist = new
+    return dist
+
+
+def simulate(st, ids, points, remaining, divisions=None, spots=None, div_winners=False, sims=SIMS, seed=1):
+    """Play the rest of the regular season `sims` times. points = {team: category points so far (a won category 1, level 0.5)}, remaining = [[pairs of that week] or None
+    (pairing unknown: drawn at random)] per week. Standing = total category points (what Yahoo ranks category leagues by), level teams broken at random. Playoff places: with
+    div_winners every division's leader plus the best of the rest by overall standing, otherwise the top `spots`.
+    -> {team: {"playoff", "first", "rank" (expected), "dist": [P(finish 1st), ...]}}"""
+    rnd = random.Random(seed)
+    n, ncat = len(ids), len(st)
+    cdf = {}
+
+    def draw(a, b):
+        key = (a, b) if a < b else (b, a)
+        if key not in cdf:
+            d, acc, c = cat_win_distribution(key[0], key[1], st), 0.0, []
+            for q in d:
+                acc += q
+                c.append(acc)
+            cdf[key] = c
+        k = bisect.bisect(cdf[key], rnd.random() * cdf[key][-1])
+        k = min(k, ncat)
+        return (k, ncat - k) if a < b else (ncat - k, k)
+    playoff, first, dist = {t: 0 for t in ids}, {t: 0 for t in ids}, {t: [0] * n for t in ids}
+    divs = divisions or {}
+    for _ in range(sims):
+        pts = dict(points)
+        for week in remaining:
+            pairs = week
+            if pairs is None:
+                order = ids[:]
+                rnd.shuffle(order)
+                pairs = [order[i:i + 2] for i in range(0, n - 1, 2)]
+            for a, b in pairs:
+                ka, kb = draw(a, b)
+                pts[a] += ka
+                pts[b] += kb
+        order = sorted(ids, key=lambda t: (-pts[t], rnd.random()))
+        for r, t in enumerate(order):
+            dist[t][r] += 1
+        first[order[0]] += 1
+        if spots:
+            if div_winners and divs:
+                win = {}
+                for t in order:
+                    win.setdefault(divs.get(t), t)
+                chosen = list(win.values())[:spots]
+                chosen += [t for t in order if t not in chosen][:max(0, spots - len(chosen))]
+            else:
+                chosen = order[:spots]
+            for t in chosen:
+                playoff[t] += 1
+    return {t: {"playoff": playoff[t] / sims, "first": first[t] / sims, "rank": sum((r + 1) * c for r, c in enumerate(dist[t])) / sims, "dist": [c / sims for c in dist[t]]} for t in ids}
+
+
+def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, base, cache, now):
+    """The `odds` part of the report, or None when it cannot be made (the league's playoff setup is not on the settings page, or no week has finished)."""
+    spots, start = settings.get("playoff_teams"), settings.get("playoff_start")
+    done = len(weeks_data) - 1
+    if not spots or not start or done < 1:
+        return None
+    regular = start - 1
+    live = weeks_data[-1]["week"]
+    left = list(range(live, regular + 1))
+    if not left:
+        return None
+    sched = fetch_schedule(fx, league, base, ids, left[1:], cache, now) if len(left) > 1 else {}
+    remaining = [weeks_data[-1].get("matchups") or None] + [sched.get(w) for w in left[1:]]   # the live week: its pairing is known from its own page
+    st = strengths(weeks_data[:done], specs, ids)
+    if not st:
+        return None
+    points = {t: float(final_cat_record[t][0]) + final_cat_record[t][2] / 2 for t in ids}
+    res = simulate(st, ids, points, remaining, settings.get("divisions") or {}, spots, settings.get("div_winners"), seed=int(league) * 1000 + done)
+    r4 = lambda x: round(x, 4)                                          # noqa: E731
+    return {"spots": spots, "regularWeeks": regular, "remaining": left, "scheduleWeeks": sum(1 for x in remaining if x), "sims": SIMS,
+            "divisions": sorted(set((settings.get("divisions") or {}).values())) or None, "divisionWinners": bool(settings.get("div_winners") and settings.get("divisions")),
+            "teams": {str(t): {"playoff": r4(r["playoff"]), "first": r4(r["first"]), "rank": r4(r["rank"]), "dist": [r4(x) for x in r["dist"]],
+                              "division": (settings.get("divisions") or {}).get(t), "points": points[t]} for t, r in res.items()}}
+
+
+SCHEMA_VERSION = 3
 
 
 def configured_champion(league, root=None):
@@ -795,7 +988,7 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
     when = now or datetime.datetime.now(datetime.timezone.utc)
     t_now = when.timestamp()                                              # the one clock: everything time-based below uses it
     fixes = []
-    st, teams, weeks_data, _base = load(league, cache, delay, sport, now=t_now, fixes=fixes)
+    st, teams, weeks_data, base = load(league, cache, delay, sport, now=t_now, fixes=fixes)
     headers = list(next(iter(weeks_data[0]["teams"].values()))["cols"])
     cats = st["categories"] or [h for h in headers if h and not h.endswith("M/A*")]
     specs, skipped = plan(cats, headers)
@@ -811,12 +1004,20 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
         views["seasonFinal"] = _season_view(cores[:done], weeks_data[:done], specs, ids)
     for wk, c in zip(weeks_data, cores):
         views["w%d" % wk["week"]] = _week_view(c, wk, specs, ids)
+    composites_final = composites(weeks_data[:done], cores[:done], specs, ids, views["seasonFinal"]) if done >= 1 else None
+    odds = None
+    if done >= 1:
+        try:
+            final_rec = {t: composites_final["realRecord"][str(t)]["catRecord"] for t in ids}
+            odds = odds_block(st, weeks_data, specs, ids, final_rec, Fetcher(delay=delay, cache=cache), league, base, cache, t_now)
+        except Exception as e:                                           # the odds are an extra: whatever goes wrong must not take the report down
+            print("note: playoff odds skipped (%s)" % e, file=sys.stderr)
     champ = resolve_champion(champion if champion is not None else configured_champion(league), names)
     return {"schema": "yahoo-roto-report/2", "schemaVersion": SCHEMA_VERSION, "league": str(league), "champion": champ, "corrections": corrections, "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "inProgressWeek": weeks_data[-1]["week"], "categories": [{"cat": sp["cat"], "lower": sp["lower"], "pct": sp["kind"] == "pct"} for sp in specs],
             "skipped": skipped, "teams": {str(t): names[t] for t in names}, "weeks": [wk["week"] for wk in weeks_data], "views": views,
             "composites": composites(weeks_data, cores, specs, ids, views["season"]),
-            "compositesFinal": composites(weeks_data[:done], cores[:done], specs, ids, views["seasonFinal"]) if done >= 1 else None}
+            "compositesFinal": composites_final, "odds": odds}
 
 
 def run(league, week=None, through=None, cache=None, delay=1.5, sport="nba", out=print):
