@@ -20,12 +20,14 @@ import yahoo_roto as yr  # noqa: E402
 
 HARNESS = r"""<!doctype html><meta charset=utf-8><body><pre id=out>pending</pre><script>
 var R={},errors=[];
-var COLOURS=[['board=real',['Wins','Expected wins','Luck','Rank','Expected rank','Places vs expected']],['board=luck&lens=summary&basis=cats',['Categories won','Expected categories','Category luck','Rank','Expected rank']],
- ['board=luck&lens=week',['Wk 2','Luck','Rank']],['board=luck&lens=cat',['Won','Expected','Luck','PTS','TO','Rank']],['board=outlook&lens=sos',["Opponents' record",'SOS','Rank']],['board=outlook&lens=odds',['Top seed','Projected rank','Category points']],
- ['board=weekly',['Points','Per week','Rank']],['board=allplay',['W-L-T','Win%','Rank']],['board=power',['Season Roto','Weekly Roto','Season All-Play','Real Record','Average','Power']],['board=roto',['Total','Rank']],['board=matchlog',['All-play Win%',"Opponent's Win%",'Luck']]];
+var COLOURS=[['board=real',['Luck','Places vs expected']],['board=luck&lens=summary&basis=cats',['Category luck','Places vs expected']],['board=luck&lens=week',['Wk 2','Luck']],['board=luck&lens=cat',['PTS','TO','Luck']],
+ ['board=outlook&lens=sos',['SOS','Rank']],['board=outlook&lens=odds',['Playoffs']],['board=weekly',['Points','Rank']],['board=allplay',['Win%','Rank']],['board=power',['Season Roto','Weekly Roto','Season All-Play','Real Record','Power']],['board=roto',['Total']],
+ ['board=matchlog',['Luck']],['board=performance&lens=form',['Last 3']],['board=performance&lens=split',['Strong Win%','Weak Win%']]];
+var PLAIN=[['board=real',['Record','Wins','Expected wins','Rank','Expected rank']],['board=luck&lens=cat',['Won','Expected','Rank']],['board=outlook&lens=sos',["Opponents' record"]],['board=outlook&lens=odds',['Top seed','Projected rank','Category points']],
+ ['board=weekly',['Per week']],['board=allplay',['W-L-T']],['board=matchlog',['All-play Win%',"Opponent's Win%"]],['board=roto',['Rank']],['board=performance&lens=form',['Season','Last 3 record']],['board=performance&lens=split',['Vs strong','Vs weak']]];
 var COPYQ=['season=1&board=roto','season=1&board=totals','season=1&board=matrix','season=1&board=weekly','season=1&board=allplay','season=1&board=real','season=1&board=luck&lens=summary&basis=cats','season=1&board=luck&lens=week','season=1&board=luck&lens=week&basis=cats','season=1&board=luck&lens=cat',
- 'season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=odds','season=1&board=kings','season=1&board=boom','season=1&board=power','week=3&view=roto','week=3&view=stats','week=3&view=allplay','week=3&view=matchups'];
-var FITS=['board=roto','board=totals','board=matrix','board=weekly','board=allplay','board=real','board=luck&lens=summary&basis=cats','board=luck&lens=week','board=luck&lens=week&basis=cats','board=luck&lens=cat','board=outlook&lens=sos','board=outlook&lens=sos&basis=cats','board=outlook&lens=odds','board=kings','board=boom','board=power'];
+ 'season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=odds','season=1&board=kings','season=1&board=performance&lens=form','season=1&board=performance&lens=split','season=1&board=power','week=3&view=roto','week=3&view=stats','week=3&view=allplay','week=3&view=matchups'];
+var FITS=['board=roto','board=totals','board=matrix','board=weekly','board=allplay','board=real','board=luck&lens=summary&basis=cats','board=luck&lens=week','board=luck&lens=week&basis=cats','board=luck&lens=cat','board=outlook&lens=sos','board=outlook&lens=sos&basis=cats','board=outlook&lens=odds','board=kings','board=performance&lens=form','board=performance&lens=split','board=power'];
 function load(q,base,width){return new Promise(function(res){var f=document.createElement('iframe');f.style.cssText='width:'+(width||1100)+'px;height:900px;border:0';f.src=(base||'')+'index.html?'+q;
  f.onload=function(){var w=f.contentWindow;w.addEventListener('error',function(e){errors.push(e.message)});setTimeout(function(){res({f:f,w:w,d:w.document})},700);};document.body.appendChild(f);});}
 function txt(e){return e?e.textContent.trim():null}
@@ -34,7 +36,7 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p.w.HTMLAnchorElement.prototype.click=function(){var a=this;p.w.fetch(a.href).then(function(r){return r.blob()}).then(function(b){return fetch('/post/'+name,{method:'POST',body:b})}).then(function(){clearTimeout(t);res()});};
  p.d.getElementById('save').click();});}
 (async function(){try{
- var p=await load('season=1&board=boom');
+ var p=await load('season=1&board=weekly');
  R.ready=p.d.body.getAttribute('data-ready');R.h1a=txt(p.d.querySelector('h1'));R.snapButtons=p.d.querySelectorAll('#snapbar button').length;
  p.d.querySelectorAll('#snapbar button')[1].click();R.h1b=txt(p.d.querySelector('h1'));
  var sf=p.d.querySelector('.snapbar select[aria-label="From week"]');sf.value='2';sf.dispatchEvent(new p.w.Event('change'));R.h1c=txt(p.d.querySelector('h1'));R.url=p.w.location.search;
@@ -45,10 +47,10 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p=await load('season=1&board=luck&lens=catweek&range=2-3');R.cwUrl=p.w.location.search;R.cwH1=txt(p.d.querySelector('h1'));R.cwCols=p.d.querySelectorAll('.tscroll .st thead tr:last-child th').length;R.cwBasis=txt(p.d.querySelector('#lensbar .seg:nth-child(2) button.on'));R.cwCells=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr:first-child td')).map(txt);
  p=await load('season=1&board=luck&lens=catweek&cat=PTS&range=2-3');R.cwPickH1=txt(p.d.querySelector('h1'));R.cwPickCells=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr:first-child td')).map(txt);
  p=await load('season=1&board=catluck');R.clH1=txt(p.d.querySelector('h1'));R.clHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
- p=await load('season=1&board=boom','old/');R.oldNote=txt(p.d.querySelector('.snapbar .rnote'));R.oldSelects=p.d.querySelectorAll('.snapbar select').length;R.oldChips=p.d.querySelectorAll('#snapbar .seg button').length;
+ p=await load('season=1&board=weekly','old/');R.oldNote=txt(p.d.querySelector('.snapbar .rnote'));R.oldSelects=p.d.querySelectorAll('.snapbar select').length;R.oldChips=p.d.querySelectorAll('#snapbar .seg button').length;
  p=await load('season=1&board=luck&range=4-4');R.oneWeek=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).map(function(r){return [r.cells[1].className.replace('cat ',''),r.cells[2].className.replace('total sep ','')]});
  R.alias={};
- for(var b of ['roto','totals','weekly','power','matrix','allplay','real','luck','luckweeks','catluck','matchlog','kings','boom','standings','records','sos','odds','outlook']){
+ for(var b of ['roto','totals','weekly','power','matrix','allplay','real','luck','luckweeks','catluck','matchlog','kings','boom','standings','records','sos','odds','outlook','form','split','performance']){
   p=await load('season=1&board='+b);R.alias[b]=[txt(p.d.querySelector('h1')),txt(p.d.querySelector('#nav .active')),txt(p.d.querySelector('#lensbar button.on')),p.w.location.search];}
  p=await load('season=1&board=real');R.tabs=[].slice.call(p.d.querySelectorAll('#nav button')).map(txt);R.lenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg:first-child button')).map(txt);R.realHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
  p=await load('season=1&board=standings&lens=odds');R.odH1=txt(p.d.querySelector('h1'));R.odHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.odRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.odBars=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i').length;R.odIn=p.d.querySelectorAll('.tscroll .st tbody tr:first-child .hb i.po').length;R.odRange=p.d.querySelectorAll('#snapbar button').length;R.odPct=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td.total'));
@@ -60,9 +62,15 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p=await load('season=1&board=outlook&lens=sos&basis=cats&range=1-3');R.sosCatRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));
  p=await load('season=1&board=outlook&lens=odds','pre/');R.preBanner=txt(p.d.querySelector('.pre'));R.preSub=txt(p.d.querySelector('.view-subtitle'));
  p=await load('season=1&board=outlook&lens=odds','none/');R.noneMsg=txt(p.d.querySelector('.msg'));R.noneTabs=[].slice.call(p.d.querySelectorAll('#nav button')).map(txt);
+ p=await load('season=1&board=performance&lens=form','long/');R.fmChips=[].slice.call(p.d.querySelectorAll('#lensbar .seg:nth-child(2) button')).map(txt);R.fmRange=p.d.querySelectorAll('#snapbar button').length;p.d.querySelectorAll('#lensbar .seg:nth-child(2) button')[1].click();R.fmH1=txt(p.d.querySelector('h1'));R.fmUrl=p.w.location.search;R.fmChange=(function(){var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt),i=hs.indexOf('Change'),sh={};[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){r.cells[i].className.split(' ').forEach(function(k){if(/^(green|red)-/.test(k))sh[k]=1;});});return Object.keys(sh);})();R.fmHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.fmRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;
+ p=await load('season=1&board=performance&lens=form');R.fmShort=txt(p.d.querySelector('h1'));R.fmShortChips=[].slice.call(p.d.querySelectorAll('#lensbar .seg:nth-child(2) button')).map(txt);
+ p=await load('season=1&board=performance&lens=split&range=2-3');R.spHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.spRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.spH1=txt(p.d.querySelector('h1'));
  R.colour=[];
  for(var spec of COLOURS){p=await load('season=1&'+spec[0]);var hs=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
   spec[1].forEach(function(hd){var i=hs.indexOf(hd),sh={};if(i>=0)[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.colour.push([spec[0],hd,i,Object.keys(sh)]);});}
+ R.plain=[];
+ for(var spec of PLAIN){p=await load('season=1&'+spec[0]);var hs2=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);
+  spec[1].forEach(function(hd){var i=hs2.indexOf(hd),sh={};if(i>=0)[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).forEach(function(r){var c=r.cells[i];if(c)c.className.split(' ').forEach(function(k){if(/^(green|red)-(strong|soft)$/.test(k))sh[k]=1;});});R.plain.push([spec[0],hd,i,Object.keys(sh)]);});}
  R.copy=[];
  for(var q of COPYQ){p=await load(q);R.copy.push([q,txt(p.d.querySelector('details.how p')),txt(p.d.querySelector('.view-subtitle')),[].slice.call(p.d.querySelectorAll('.tscroll th[title]')).map(function(e){return e.getAttribute('title')})]);}
  R.strip=[].slice.call(p.d.querySelectorAll('.strip button')).map(txt).slice(0,3);
@@ -184,8 +192,9 @@ class Browser(unittest.TestCase):
         want = {"roto": ("Roto Rank", "Standings", "Season Roto"), "totals": ("Stats", "Standings", "Raw Totals"), "weekly": ("Weekly Roto Points", "Standings", "Weekly Roto Points"),
                 "power": ("Power Rank", "Standings", "Power Rank"), "matrix": ("All-Play Matrix", "All-Play", "Matrix"), "allplay": ("Season All-Play", "All-Play", "Season All-Play"),
                 "real": ("Real Record & Luck", "Luck", "Summary"), "luck": ("Luck by Week", "Luck", "By week"), "luckweeks": ("Luck by Week", "Luck", "By week"),
-                "catluck": ("Category Luck", "Luck", "By category"), "matchlog": ("Matchup Log", "Luck", "Matchup Log"), "kings": ("Category Kings", "Records", "Category Kings"),
-                "boom": ("Boom / Bust", "Records", "Boom / Bust"), "standings": ("Roto Rank", "Standings", "Season Roto"), "records": ("Category Kings", "Records", "Category Kings"),
+                "catluck": ("Category Luck", "Luck", "By category"), "matchlog": ("Matchup Log", "Luck", "Matchup Log"), "kings": ("Category Kings", "Performance", "Category Kings"),
+                "boom": ("Recent Form", "Performance", "Recent form"), "standings": ("Roto Rank", "Standings", "Season Roto"), "records": ("Recent Form", "Performance", "Recent form"),
+                "form": ("Recent Form", "Performance", "Recent form"), "split": ("Vs Strong", "Performance", "Vs strong / weak"), "performance": ("Recent Form", "Performance", "Recent form"),
                 "sos": ("Strength of Schedule", "Outlook", "Strength of schedule"), "odds": ("Playoff Odds", "Outlook", "Playoff odds"), "outlook": ("Playoff Odds", "Outlook", "Playoff odds")}
         for board, (title, tab, lens) in want.items():
             h1, active_tab, active_lens, search = self.R["alias"][board]
@@ -194,7 +203,7 @@ class Browser(unittest.TestCase):
             self.assertIn("lens=", search, board)                                   # the address is rewritten to the new form (board=<tab>&lens=<view>)
 
     def test_five_tabs_with_the_views_of_the_open_tab_under_them(self):
-        self.assertEqual(self.R["tabs"], ["Standings", "All-Play", "Luck", "Outlook", "Records"])
+        self.assertEqual(self.R["tabs"], ["Standings", "All-Play", "Luck", "Outlook", "Performance"])
         self.assertEqual(self.R["lenses"], ["Summary", "By week", "By category", "Matchup Log"])
 
     def test_the_summary_follows_the_matchups_or_categories_switch(self):
@@ -226,7 +235,7 @@ class Browser(unittest.TestCase):
         self.assertEqual(self.R["noneTabs"][3], "Outlook")                                # the tab is still there, with the explanation
 
     def test_every_season_view_fits_in_the_image_on_a_full_length_season(self):
-        self.assertEqual(len(self.R["fit"]), 16)
+        self.assertEqual(len(self.R["fit"]), 17)
         for q, overflow, h1, _ in self.R["fit"]:
             self.assertIsNotNone(h1, q)
             self.assertLessEqual(overflow, 1, "%s runs %s px wider than the image" % (q, overflow))
@@ -235,6 +244,11 @@ class Browser(unittest.TestCase):
         for q, header, index, shades in self.R["colour"]:
             self.assertGreaterEqual(index, 0, "%s: no column %r" % (q, header))
             self.assertTrue(any(s.startswith("green") for s in shades) and any(s.startswith("red") for s in shades), "%s: %r has no green and red (%s)" % (q, header, shades))
+
+    def test_supporting_columns_stay_plain_so_each_table_says_only_one_or_two_things(self):
+        for q, header, index, shades in self.R["plain"]:
+            self.assertGreaterEqual(index, 0, "%s: no column %r" % (q, header))
+            self.assertEqual(shades, [], "%s: %r should not be coloured" % (q, header))
 
     def test_weeks_are_labelled_wk_not_w(self):
         self.assertEqual(self.R["strip"], ["Wk 1", "Wk 2", "Wk 3"])
@@ -250,6 +264,23 @@ class Browser(unittest.TestCase):
             for text in [note, sub or ""] + tips:
                 for word in banned:
                     self.assertNotIn(word, text, "%s: %r in %r" % (q, word, text[:60]))
+
+    def test_recent_form_has_selectable_windows_and_no_week_range(self):
+        self.assertEqual(self.R["fmChips"], ["Last 3", "Last 5", "Last 8"])                  # an 18-week season offers all three windows
+        self.assertEqual(self.R["fmRange"], 0)                                               # the week range does not apply
+        self.assertIn("Last 5", self.R["fmH1"])
+        self.assertIn("win=5", self.R["fmUrl"])
+        self.assertEqual(self.R["fmHeads"], ["Team", "Last 5", "Season", "Change", "Last 5 record"])
+        self.assertEqual(self.R["fmRows"], 18)
+        self.assertEqual(self.R["fmShortChips"], ["Last 3"])                                 # three finished weeks: only the 3-week window fits
+
+    def test_recent_form_change_is_coloured_when_form_moved(self):
+        self.assertTrue(any(s.startswith("green") for s in self.R["fmChange"]) and any(s.startswith("red") for s in self.R["fmChange"]), self.R["fmChange"])
+
+    def test_vs_strong_and_weak_teams(self):
+        self.assertEqual(self.R["spHeads"], ["Team", "Vs strong", "Strong Win%", "Vs weak", "Weak Win%"])
+        self.assertEqual(self.R["spRows"], 18)
+        self.assertIn("Weeks 2-3", self.R["spH1"])                                           # follows the week range
 
     def test_matchup_log_has_a_row_per_team_and_week(self):
         self.assertEqual(self.R["mlRows"], 3 * 18)
