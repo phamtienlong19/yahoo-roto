@@ -237,8 +237,8 @@ class Browser(unittest.TestCase):
         self.assertEqual(sum(int(x) for x in self.R["sosCatRec"].split("-")), 9 * 3 * 3)           # nine categories to a matchup
         self.assertIn("Rest of season", self.R["sosPeriods"])
         self.assertIn("Rest of Season", self.R["sosRestH1"])
-        self.assertEqual(sum(int(x) for x in self.R["sosRestRec"].split("-")), 7 * 3)              # seven weeks left x the 3 finished games of each opponent
-        self.assertEqual(sum(int(x) for x in self.R["sosRestCat"].split("-")), 7 * 3 * 9)
+        self.assertEqual(sum(int(x) for x in self.R["sosRestRec"].split("-")), 7 * 4)              # seven weeks left x the 4 games of each opponent, the week in progress included
+        self.assertEqual(sum(int(x) for x in self.R["sosRestCat"].split("-")), 7 * 4 * 9)
         self.assertEqual(self.R["sosRestRange"], 0)                                                # the week range does not apply to what is still to come
         self.assertIn("per=rest", self.R["sosRestUrl"])
 

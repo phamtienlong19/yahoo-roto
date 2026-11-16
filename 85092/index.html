@@ -639,7 +639,7 @@ function tl(r,all){return P.tl(r,all);}
 function orderBy(map,key){return Object.keys(map).sort(function(a,b){return map[a][key]-map[b][key]||a-b;});}
 function chips(arr,n){return h("span",{class:"chips"},arr.map(function(r){return h("span",{class:P.rankCls(r,n),text:String(r)});}));}
 function luckCls(x,k){k=k||1;return x==null?"mid":x>=0.5*k?"green-strong":x>0.15*k?"green-soft":x<=-0.5*k?"red-strong":x<-0.15*k?"red-soft":"mid";}   /* one week's luck: matchup result minus the all-play Win% */
-var CLC={},SCC={};function sosData(){var rest=period()==="rest",k=(rest?"rest":C_key())+basis();return SCC[k]||(SCC[k]=rest?P.sosRest(DOC,finished(),DOC.odds.schedule,basis()):P.sos(DOC,comp().weeks,basis()));}
+var CLC={},SCC={};function sosData(){var rest=period()==="rest",k=(rest?"rest":C_key())+basis();return SCC[k]||(SCC[k]=rest?P.sosRest(DOC,DOC.weeks,DOC.odds.schedule,basis()):P.sos(DOC,comp().weeks,basis()));}
 function cr(m,ids){var o={};ids.forEach(function(i){o[i]=1+ids.filter(function(j){return m[j]!=null&&(m[i]==null||m[j]>m[i]+1e-9);}).length;});return o;}
 function C_key(){var r=rng();return r[0]+"-"+r[1];}
 function clw(w){return CLC[w]||(CLC[w]=P.catLuckWeek(DOC,w));}
@@ -775,10 +775,10 @@ function boardSheet(b){var banner=null,tfull=null,C=comp(),n=Object.keys(DOC.tea
   note="We play out the rest of the regular season "+Number(O.sims).toLocaleString("en-US")+" times. A stronger team usually wins more categories, but not always. The standing is category points."+(O.divisionWinners?" Division leaders qualify first.":"")+" The week in progress counts as unplayed."+(whole?"":" Some remaining weeks assume random opponents until their pairings are read.");shade="Playoffs is coloured by the chance itself: dark green 90%+, dark red under 10%.";}
  else if(b==="sos"){var BS=basis(),cm=BS==="cats",rest=period()==="rest",ids=Object.keys(C.realRecord),SO=sosData(),pv={};ids.forEach(function(i){pv[i]=SO[i].pct;});
   var o=ids.slice().sort(function(a,c){return (pv[c]==null?-1:pv[c])-(pv[a]==null?-1:pv[a])||a-c;}),SR=cr(pv,ids),SRL=o.map(function(i){return SR[i];}),cs=shadeCol(o,pv,true),csr=shadeCol(o,SR,false);
-  title="Strength of Schedule";sub=rest?"The opponents still to come, by their record through "+wkl(finished()[finished().length-1]):"How good the opponents each team faced were";if(rest)tfull=lg()+" Strength of Schedule: Rest of Season";
+  title="Strength of Schedule";sub=rest?"The opponents still to come, by their record through "+wkl(lastWeek())+(lastWeek()>doneWeek()?" (live)":""):"How good the opponents each team faced were";if(rest)tfull=lg()+" Strength of Schedule: Rest of Season";
   heads=["Team",["Opponents' record",null,"Their combined "+(cm?"category":"matchup")+" record"+(rest?" so far":"")],["SOS",null,"Opponents' win %"],["Rank",null,"1 = toughest schedule"]];
   rows=o.map(function(id){var r=SO[id];return h("tr",null,[teamTh(id),td(r.pct==null?"–":r.record.join("-")),td(P.pct(r.pct),"total "+cs[id]),td(r.pct==null?"–":tl(SR[id],SRL),"rank "+csr[id])]);});
-  note=rest?"SOS = how often the opponents still to come have won so far, counting every game they played. Red = tougher run-in, green = easier. It covers the weeks from the one in progress to the end of the regular season."
+  note=rest?"SOS = how often the opponents still to come have won so far, counting every game they played, including the week in progress as it stands. Red = tougher run-in, green = easier. It covers the weeks from the one in progress to the end of the regular season."
    :"SOS = how often the opponents you faced have won, counting every game they played. Red = tougher schedule, green = easier. Early in the season each opponent has played only a few games, so expect big swings.";}
  else if(b==="matchlog"){title="Matchup Log";var items=[],ids=[],cols={wp:{},ow:{},lk:{}};
   Object.keys(C.weekly).forEach(function(id){C.weeks.forEach(function(w){var v=C.weekly[id][w];if(!v||v.result==null||v.opp==null)return;items.push({id:id,w:w,v:v,o:C.weekly[v.opp][w],x:resVal(v.result)-v.winPct});});});
