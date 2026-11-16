@@ -387,20 +387,26 @@ function sosRest(doc,ws,schedule,basis){
 /* All-play records per team and week come from the weekly composites (allPlay = [W, L, T] against every other team that week). */
 function apPct(r){var g=r[0]+r[1]+r[2];return g?(2*r[0]+r[2])/(2*g):null;}
 function sumRec(list){var r=[0,0,0];list.forEach(function(x){if(x){r[0]+=x[0];r[1]+=x[1];r[2]+=x[2];}});return r;}
-/* Recent form: all-play record over the last n of the given weeks against the same measure over all of them. -> {team: {last:{record,pct}, season:{record,pct}, change}} */
-function form(doc,ws,n){
+/* One real game of a team in a week: its matchup result as [W, L, T] (basis "matchups") or its category record that week (basis "cats"); null when the week has no result. */
+var ONE={W:[1,0,0],L:[0,1,0],T:[0,0,1]};
+function realGame(v,basis){if(!v||v.opp==null||v.result==null)return null;return basis==="cats"?v.catRecord:ONE[v.result];}
+function realSum(wk,t,ws,basis){var r=[0,0,0],g=0;ws.forEach(function(w){var x=realGame(wk[t]&&wk[t][w],basis);if(x){r[0]+=x[0];r[1]+=x[1];r[2]+=x[2];g++;}});return {record:r,pct:apPct(r),games:g};}
+/* Recent form: the real record over the last n of the given weeks against the same measure over all of them (basis "matchups": weekly matchup results; "cats": categories won).
+   `earned` is what the stats said over the last n weeks: the all-play Win% of the same weeks. -> {team: {last:{record,pct}, season:{record,pct}, change, earned}} */
+function form(doc,ws,n,basis){
  var ids=Object.keys(doc.teams).map(Number).sort(function(a,b){return a-b;}),wk=doc.composites.weekly,tail=ws.slice(Math.max(0,ws.length-n)),out={};
- ids.forEach(function(t){var lr=sumRec(tail.map(function(w){return wk[t][w].allPlay;})),sr=sumRec(ws.map(function(w){return wk[t][w].allPlay;})),lp=apPct(lr),sp=apPct(sr);
-  out[t]={last:{record:lr,pct:lp},season:{record:sr,pct:sp},change:lp==null||sp==null?null:lp-sp};});
+ ids.forEach(function(t){var l=realSum(wk,t,tail,basis),s=realSum(wk,t,ws,basis);
+  out[t]={last:{record:l.record,pct:l.pct},season:{record:s.record,pct:s.pct},change:l.pct==null||s.pct==null?null:l.pct-s.pct,earned:apPct(sumRec(tail.map(function(w){return wk[t][w].allPlay;})))};});
  return out;}
-/* Record against the strong and the weak half of the league: teams are ordered by all-play Win% over the weeks (then roto points, then id); the top floor(n/2) are strong, the
-   bottom floor(n/2) weak (with an odd number of teams the middle one is in neither). A team is never counted against itself. A game is one week against one team, won with
-   more categories (a cell of that week's all-play matrix). -> {team: {strong:{record,pct}, weak:{record,pct}}, order: [teams strongest first]} */
-function split(doc,ws){
+/* Record against the strong and the weak half of the league. Who is strong is measured by the stats: teams are ordered by all-play Win% over the weeks (then roto points, then
+   id); the top floor(n/2) are strong, the bottom floor(n/2) weak (with an odd number of teams the middle one is in neither). The record itself is real: the matchups a team
+   actually played against those opponents (basis "matchups") or the categories it won in them ("cats"). `games` is the number of matchups behind it.
+   -> {team: {strong:{record,pct,games}, weak:{record,pct,games}}, order: [teams strongest first]} */
+function split(doc,ws,basis){
  var ids=Object.keys(doc.teams).map(Number).sort(function(a,b){return a-b;}),wk=doc.composites.weekly,k=Math.floor(ids.length/2),pc={},pts={},out={};
  ids.forEach(function(t){pc[t]=apPct(sumRec(ws.map(function(w){return wk[t][w].allPlay;})));pts[t]=ws.reduce(function(s,w){return s+wk[t][w].total;},0);});
  var order=ids.slice().sort(function(a,b){return (pc[b]-pc[a])||(pts[b]-pts[a])||a-b;}),strong=order.slice(0,k),weak=order.slice(order.length-k);
- function vs(t,set){var r=[0,0,0];ws.forEach(function(w){var m=doc.views["w"+w].matrix[t];set.forEach(function(o){if(o===t)return;var c=m[o];if(c[0]>c[1])r[0]++;else if(c[0]<c[1])r[1]++;else r[2]++;});});return {record:r,pct:apPct(r)};}
+ function vs(t,set){var r=[0,0,0],g=0;ws.forEach(function(w){var v=wk[t]&&wk[t][w],x=realGame(v,basis);if(x&&v.opp!==t&&set.indexOf(v.opp)>=0){r[0]+=x[0];r[1]+=x[1];r[2]+=x[2];g++;}});return {record:r,pct:apPct(r),games:g};}
  ids.forEach(function(t){out[t]={strong:vs(t,strong),weak:vs(t,weak)};});
  out.order=order;return out;}
 /* Sparkline geometry: values (null = missing) -> {pts: [[x,y]...], baseY (where the baseline sits, or null), last: [x,y]}. opt.lo / opt.hi give a domain shared by every row of a
@@ -418,7 +424,7 @@ function movers(prev,cur,min,k){
  var up=list.filter(function(x){return x.delta>=min;}).sort(function(a,b){return b.delta-a.delta||a.id-b.id;}).slice(0,k),
   down=list.filter(function(x){return x.delta<=-min;}).sort(function(a,b){return a.delta-b.delta||a.id-b.id;}).slice(0,k);
  return {up:up,down:down};}
-return {range:range,movers:movers,sos:sos,sosRest:sosRest,sparkGeom:sparkGeom,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
+return {range:range,realGame:realGame,movers:movers,sos:sos,sosRest:sosRest,sparkGeom:sparkGeom,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
 })();
 </script>
 <script>
@@ -672,6 +678,7 @@ function weekSeries(id,kind,ws){var C=comp();
   if(kind==="luck"||kind==="exp"){if(v&&v.result!=null)x=kind==="luck"?resVal(v.result)-v.winPct:v.winPct;}
   else if(kind==="cat"){if(v&&v.result!=null){var d=clw(w)[id];x=DOC.categories.reduce(function(a,c){return a+d[c.cat][0]-d[c.cat][1];},0);}}
   else if(kind==="win"){x=v?v.winPct:null;}
+  else if(kind==="real"){var g=P.realGame(v,basis());x=g?(2*g[0]+g[2])/(2*(g[0]+g[1]+g[2])):null;}
   acc.push(x);return acc;},[]);}
 var RKC={};function rankAfter(ws,i){var k=ws.slice(0,i+1).join(",");return RKC[k]||(RKC[k]=P.range(DOC,ws.slice(0,i+1)));}
 function rankSeries(id,ws){return ws.map(function(w,i){var r=canRange()||i===ws.length-1&&ws.length===DOC.weeks.length?rankAfter(ws,i):null;return r?r.view.teams[id].rank:null;});}
@@ -805,20 +812,21 @@ function boardSheet(b){var banner=null,tfull=null,moversEl=null,acc=null,C=comp(
   rows=items.map(function(it){var c=it.v.catRecord||[0,0,0];return h("tr",null,[teamTh(it.id),td(wkl(it.w)),td(name(it.v.opp),"left"),td(catsText(c)),td(P.signed(c[0]-c[1],0),P.matrixCls(c[0]-c[1])),td(P.pct(it.v.winPct)),td(P.pct(it.o.winPct)),
    td(it.v.result,it.v.result==="W"?"green-soft":it.v.result==="L"?"red-soft":"lvl"),td(P.signed(it.x,2),"total "+slk[it.k])]);});
   note="Tap a column to sort. Luck = result minus all-play Win%, as on the Luck tab.";shade="Luck is ranked across all rows; Margin uses the category-score shades.";}
- else if(b==="form"){var ws=finished(),N=winN();title="Recent Form";sub="How your stats did lately, against the whole season";
+ else if(b==="form"){var ws=finished(),N=winN(),BS=basis(),cm=BS==="cats",unit=cm?"categories":"matchups";title="Recent Form";sub="Your real "+unit+" record lately, against the whole season";
   if(!N||ws.length<3)return sheet("data",lg()+" Recent Form",sub,[h("div",{class:"msg"},[h("b",{text:"Not enough weeks yet"}),"Recent form needs at least 3 finished weeks."])],null);
-  var F=P.form(DOC,ws,N),ids=Object.keys(F),lm={},sm={},cm={},WS={};ids.forEach(function(i){WS[i]=weekSeries(i,"win",ws);});var WD=shared(ids.map(function(i){return WS[i];}),0.5,true);ids.forEach(function(i){lm[i]=F[i].last.pct;sm[i]=F[i].season.pct;cm[i]=F[i].change;});
-  var o=ids.slice().sort(function(a,c){return (lm[c]-lm[a])||(sm[c]-sm[a])||a-c;}),sl=shadeCol(o,lm),ss=shadeCol(o,sm),sc=shadeCol(o,cm);
-  heads=["Team",["Last "+N,null,"All-play Win% over the last "+N+" finished weeks"],["Season",null,"All-play Win% over all finished weeks"],["Change (pts)",null,"Last "+N+" minus season, in percentage points: positive = improving"],["By week",null,"All-play Win% each week; dashed line = 50%, an average week"]];
-  rows=o.map(function(id){var r=F[id];return h("tr",null,[teamTh(id),td(P.pct(r.last.pct),"total "+sl[id]),td(P.pct(r.season.pct)),td(P.pts(r.change),"total "+sc[id]),trendTd(WS[id],{lo:WD.lo,hi:WD.hi,base:0.5,baseNote:"Dashed line = 50%, an average week",label:"All-play Win%",fmt:P.pct,names:ws.map(function(w){return wkl(w)+": ";})})]);});
+  var F=P.form(DOC,ws,N,BS),ids=Object.keys(F),lm={},sm={},cm_={},WS={};ids.forEach(function(i){WS[i]=weekSeries(i,"real",ws);});var WD=shared(ids.map(function(i){return WS[i];}),0.5,true);ids.forEach(function(i){lm[i]=F[i].last.pct;sm[i]=F[i].season.pct;cm_[i]=F[i].change;});
+  var o=ids.slice().sort(function(a,c){return (lm[c]-lm[a])||(sm[c]-sm[a])||a-c;}),sl=shadeCol(o,lm),sc=shadeCol(o,cm_);
+  heads=["Team",["Last "+N,null,"Real "+unit+" record over the last "+N+" finished weeks"],["Win%",null,"Wins plus half the ties, divided by games, over the last "+N+" weeks"],["Season Win%",null,"The same over all finished weeks"],["Change (pts)",null,"Last "+N+" minus season, in percentage points: positive = improving"],["Stats said",null,"All-play Win% over the last "+N+" weeks: what the stats earned, whoever you faced"],["By week",null,"Win% each week; dashed line = 50%"]];
+  rows=o.map(function(id){var r=F[id];return h("tr",null,[teamTh(id),td(r.last.record.join("-")),td(P.pct(r.last.pct),"total "+sl[id]),td(P.pct(r.season.pct)),td(P.pts(r.change),"total "+sc[id]),td(P.pct(r.earned)),trendTd(WS[id],{lo:WD.lo,hi:WD.hi,base:0.5,baseNote:"Dashed line = 50%",label:"Win%",fmt:P.pct,names:ws.map(function(w){return wkl(w)+": ";})})]);});
   title="Recent Form · Last "+N+" weeks";
-  note="Win% here is all-play: the share of teams your stats beat each week. Change = the last "+N+" weeks minus the whole season, so a positive number means a team is improving. In the lines, the dashed line is an average week (50%).";}
- else if(b==="split"){var ws=C.weeks,SP=P.split(DOC,ws),ids=Object.keys(SP).filter(function(k){return k!=="order";}),n2=Math.floor(ids.length/2),sv_={},wv_={};ids.forEach(function(i){sv_[i]=SP[i].strong.pct;wv_[i]=SP[i].weak.pct;});
+  note="Win% counts your real "+unit+" over the last "+N+" weeks. Change = that minus the whole season, so a positive number means a team is improving. Stats said is the all-play Win% of the same weeks: if it sits above the real Win%, the stats earned more than the results show.";}
+ else if(b==="split"){var ws=C.weeks,BS=basis(),cm=BS==="cats",unit=cm?"categories":"matchups",thin=cm?2:3,SP=P.split(DOC,ws,BS),ids=Object.keys(SP).filter(function(k){return k!=="order";}),n2=Math.floor(ids.length/2),sv_={},wv_={};
+  ids.forEach(function(i){sv_[i]=SP[i].strong.games>=thin?SP[i].strong.pct:null;wv_[i]=SP[i].weak.games>=thin?SP[i].weak.pct:null;});
   var o=ids.slice().sort(function(a,c){return ((sv_[c]==null?-1:sv_[c])-(sv_[a]==null?-1:sv_[a]))||a-c;}),cs=shadeCol(o,sv_),cw=shadeCol(o,wv_);
-  title="Vs Strong and Weak Teams";sub="Your all-play record against the best and worst halves";
-  heads=["Team",["Vs strong",null,"All-play record against the top "+n2+" teams"],["Strong Win%",null,"Wins plus half the ties, divided by games"],["Vs weak",null,"All-play record against the bottom "+n2+" teams"],["Weak Win%",null,"Wins plus half the ties, divided by games"]];
-  rows=o.map(function(id){var r=SP[id];return h("tr",null,[teamTh(id),td(r.strong.record.join("-")),td(P.pct(r.strong.pct),"total "+cs[id]),td(r.weak.record.join("-")),td(P.pct(r.weak.pct),"total "+cw[id])]);});
-  note="Strong = the top half of the league by all-play Win% over these weeks, weak = the bottom half. A team is never counted against itself. It shows who beats good teams, not only easy ones.";}
+  title="Vs Strong and Weak Teams";sub="Your real "+unit+" record against the best and worst halves";
+  heads=["Team",["Vs strong",null,"Real "+unit+" record against the top "+n2+" teams; (n) = matchups played"],["Strong Win%",null,"Wins plus half the ties, divided by games. Left white until "+thin+" matchups"],["Vs weak",null,"Real "+unit+" record against the bottom "+n2+" teams; (n) = matchups played"],["Weak Win%",null,"Wins plus half the ties, divided by games. Left white until "+thin+" matchups"]];
+  rows=o.map(function(id){var r=SP[id];return h("tr",null,[teamTh(id),td(r.strong.record.join("-")+" ("+r.strong.games+")"),td(P.pct(r.strong.pct),"total "+cs[id]),td(r.weak.record.join("-")+" ("+r.weak.games+")"),td(P.pct(r.weak.pct),"total "+cw[id])]);});
+  note="Strong = the top half of the league by all-play Win% over these weeks, weak = the bottom half. The record is what really happened: only the matchups you played against those teams, so it is a small sample early on.";}
  else if(b==="kings"){title="Category Kings";heads=[["Category","team"],["Leader","left"],["Total",null],["Leader","left sep"],["Week",null],["Best",null]];
   var kc=DOC.categories.filter(function(c){return C.categoryKings[c.cat];}),
    who=function(k){return k?h("td",{class:"left king"},[h("span",{class:"kn"},nameInline(k.team)),(k.also&&k.also.length)?h("span",{class:"small",text:"+"+k.also.length+" tied"}):null].filter(Boolean)):td("–","left");};
@@ -860,7 +868,7 @@ function fitStatic(){if(!STATIC)return;var sc=document.querySelector(".tscroll")
 function measure(){var m=$("hmeta")||h("meta",{id:"hmeta",name:"report-height"}),s=document.querySelector(".sheet");if(!s)return;
  m.setAttribute("content",String(Math.ceil(s.getBoundingClientRect().bottom+window.pageYOffset)));document.head.appendChild(m);}
 /* Click-to-sort: tap a column header; first desc (A-Z for text), then the opposite, then back to the default order. Rows are only reordered in the DOM. */
-var BASISED={real:1,luckweek:1,sos:1},NORANGE={odds:1,form:1};   /* NORANGE: the week-range bar does not apply to these views */   /* the views that follow the Matchups | Categories switch */
+var BASISED={real:1,luckweek:1,sos:1,form:1,split:1},NORANGE={odds:1,form:1};   /* NORANGE: the week-range bar does not apply to these views */   /* the views that follow the Matchups | Categories switch */
 function sortId(){return S.season?"s:"+boardOf()+(boardOf()==="form"?":"+winN():"")+(BASISED[boardOf()]?":"+basis()+(boardOf()==="sos"?":"+period():"")+(boardOf()==="luckweek"?":"+(S.cat||""):""):""):"v:"+viewOf();}             /* a week view keeps its sort when you move to another week */
 function applySort(tb){var th=tb.tHead.rows[tb.tHead.rows.length-1],body=tb.tBodies[0],rows=[].slice.call(body.rows),sc=S.sort&&S.sort.id===sortId()?S.sort:null;
  [].forEach.call(th.cells,function(c,i){if(sc&&sc.col===i)c.setAttribute("aria-sort",sc.dir==="asc"?"ascending":"descending");else c.removeAttribute("aria-sort");});
