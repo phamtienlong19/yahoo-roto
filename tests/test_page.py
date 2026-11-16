@@ -34,6 +34,26 @@ class Page(unittest.TestCase):
                 out = subprocess.run(["node", "--check", path], capture_output=True, text=True, timeout=30)
                 self.assertEqual(out.returncode, 0, "script %d: %s" % (i, out.stderr))
 
+    def test_the_readme_stays_short_and_plain(self):
+        with open(os.path.join(HERE, "..", "README.md"), encoding="utf-8") as f:
+            text = f.read()
+        in_code = False
+        for line in text.split("\n"):                                          # a line is a paragraph or one list item
+            if line.startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code or line.lstrip().startswith("|"):
+                continue
+            self.assertLessEqual(len(line.split()), 80, "README line too long: %s..." % line[:50])
+        for word in ("log5", "shrunk", "Exp.", "schedule.json", "odds.json"):
+            self.assertNotIn(word, text)                                       # internals live in ARCHITECTURE.md
+        self.assertLessEqual(len(text.split()), 900)
+
+    def test_no_week_is_labelled_w_followed_by_a_number(self):
+        with open(PAGE, encoding="utf-8") as f:
+            src = f.read()
+        self.assertEqual(re.findall(r'"W"\s*\+', src), [])                     # "W4" reads as "won 4"; weeks are "Wk 4"
+
     def test_css_uses_only_the_root_selectors_the_image_export_knows_how_to_move(self):
         # Save-as-image copies the page's CSS into a wrapper and rewrites `:root{`, `html{`, `body{` and `body.static`. A rule that targets html/body any other way would
         # silently lose its styling in saved images, so this fails until the export code is taught about it.
