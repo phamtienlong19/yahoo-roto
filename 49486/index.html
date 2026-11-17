@@ -302,13 +302,13 @@ function sortKey(t){ /* a table cell's text -> the number to sort by (null = sor
  t=t.replace(/\u2212/g,"-").replace(/^W(?=\d)/,"").replace(/^T-(?=\d)/,"");var m=t.match(/^[+-]?(\d+\.?\d*|\.\d+)/);return m?parseFloat(m[0]):null;}
 function tl(r,all){return all.filter(function(x){return x===r;}).length>1?"T-"+r:String(r);}   /* a rank shared by several teams reads T-5 */
 /* One week's category luck per team and category: [real, expected] = categories won against the actual opponent, and the share of the other teams the stats would have beaten
-   (all-play). A team without a finished matchup that week has [0,0]. The season Category Luck is these added over the weeks. */
+   (all-play). A team without a finished matchup that week has [0,0], and so does everyone in a category some team has no value for yet (a percentage with no attempts). The season Category Luck is these added over the weeks. */
 function catLuckWeek(doc,w){
  var cats=doc.categories,ids=Object.keys(doc.teams).map(Number).sort(function(a,b){return a-b;}),n=ids.length,wv=doc.views["w"+w],wkk=doc.composites.weekly,q=function(x){return Math.round(x*1e9);},out={};
  ids.forEach(function(t){out[t]={};cats.forEach(function(c){out[t][c.cat]=[0,0];});});
  if(!wv)return out;
  cats.forEach(function(c){var vals={},ok=n>1;ids.forEach(function(t){var v=wv.teams[t].values[c.cat];vals[t]=v;if(v==null)ok=false;});
-  ids.forEach(function(t){var o=wkk[t][w].opp,x=vals[t],y=o==null?null:vals[o],d,e;if(wkk[t][w].result==null||x==null||y==null)return;
+  ids.forEach(function(t){var o=wkk[t][w].opp,x=vals[t],y=o==null?null:vals[o],d,e;if(!ok||wkk[t][w].result==null||x==null||y==null)return;
    d=q(x)===q(y)?0:((x<y)===c.lower?1:-1);out[t][c.cat][0]+=(d+1)/2;
    if(ok){e=0;ids.forEach(function(p){if(p!==t){var z=q(x)===q(vals[p])?0:((x<vals[p])===c.lower?1:-1);e+=(z+1)/2;}});out[t][c.cat][1]+=e/(n-1);}});});
  return out;}
