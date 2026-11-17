@@ -158,6 +158,18 @@ class Season(unittest.TestCase):
         self.assertEqual([r[str(t)]["rank"] for t in IDS], [2, 2, 1, 4])
         self.assertEqual([r[str(t)]["record"] for t in IDS], [[1, 1, 0], [1, 1, 0], [1, 0, 1], [0, 1, 1]])   # the matchup record stays as a column
 
+    def test_category_luck_survives_a_percentage_with_no_attempts_yet(self):
+        # Monday of a new week: a team with 0 FT attempts has no FT%, so cat_play drops FT% for the week; composites must not KeyError
+        specs = SPECS + [{"cat": "FT%", "kind": "pct", "col": "FT%", "lower": False}]
+        w3 = wk(3, {1: (5, 1), 2: (6, 2), 3: (7, 3), 4: (8, 4)}, {1: 0, 2: 0, 3: 0, 4: 0}, [[1, 2], [3, 4]])
+        for i, t in enumerate(w3["teams"].values()):
+            t["cols"]["FT%"] = (F(0), F(0)) if i == 0 else (F(3), F(4))
+        weeks = [w3]
+        cores = [yr._core(w, specs) for w in weeks]
+        season = yr._season_view(cores, weeks, specs, IDS)
+        c = yr.composites(weeks, cores, specs, IDS, season)
+        self.assertIn("catLuck", c)
+
     def test_category_kings_season_and_best_week(self):
         _, _, _, c = build()
         k = c["categoryKings"]
