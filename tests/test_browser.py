@@ -109,6 +109,10 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  R.legendFull=!!p.d.querySelector('.legend.full');R.meline=!!p.d.querySelector('.meline');
  p=await load('week=3&view=stats');await save(p,'stats.png');
  p=await load('season=1&board=power');await save(p,'power.png');
+ p=await load('week=4&view=roto','cup/');R.cupWrap=p.d.querySelector('.wrap').classList.contains('cup');R.cupSheet=p.d.querySelectorAll('.sheet.cup').length;R.cupHead=p.d.querySelectorAll('.cuphead h1').length;R.cupKicker=txt(p.d.querySelector('.cuphead .kicker'));
+ R.cupChips=[].slice.call(p.d.querySelectorAll('.st th.team .lgchip')).map(function(e){return e.textContent});R.cupChipTip=(p.d.querySelector('.st th.team .lgchip.sub')||{}).title;R.cupQ=p.d.querySelectorAll('.st th.team.q').length;R.cupCut=p.d.querySelectorAll('.st tr.cut').length;
+ R.cupCutAfter=(function(){var r=p.d.querySelector('.st tr.cut');return r?[].slice.call(r.parentNode.rows).indexOf(r)+1:0})();R.cupKey=p.d.querySelectorAll('.cupkey').length;
+ p=await load('week=4&view=roto');R.plainWrap=p.d.querySelector('.wrap').classList.contains('cup');R.plainChips=p.d.querySelectorAll('.lgchip,.cuphead,.cupkey,th.team.q,tr.cut').length;
  R.errors=errors;
 }catch(e){R.fatal=String(e&&e.message||e);R.errors=errors}
 document.getElementById('out').textContent=JSON.stringify(R);document.title='done';})();
@@ -144,6 +148,11 @@ class Browser(unittest.TestCase):
             for t in v["teams"].values():
                 t.pop("raw", None)
         yr.write_html(old, os.path.join(cls.site, "old"))
+        cup = json.loads(json.dumps(main))                                                                 # a cup league: three teams qualified from Serie A (one by a substitute), spots = 8
+        ids = sorted(cup["teams"], key=int)
+        cup["cup"] = {"spots": 8, "leagues": {"SA": {"label": "Serie A", "color": "#002060"}},
+                      "teams": {ids[0]: {"league": "SA", "rank": 1}, ids[1]: {"league": "SA", "rank": 2, "also": ["C1 3"]}, ids[2]: {"league": "SA", "rank": 3, "substitute": "Somebody"}}}
+        yr.write_html(cup, os.path.join(cls.site, "cup"))
         with open(os.path.join(cls.site, "t.html"), "w", encoding="utf-8") as f:
             f.write(HARNESS)
         cls.posted = {}
@@ -169,6 +178,19 @@ class Browser(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.shutdown()
         cls.tmp.cleanup()
+
+    def test_a_cup_league_gets_the_cup_skin_chips_band_and_cut_line_and_a_normal_league_does_not(self):
+        R = self.R
+        self.assertTrue(R["cupWrap"])
+        self.assertEqual((R["cupSheet"], R["cupHead"], R["cupKey"]), (1, 1, 1))
+        self.assertIn("TOP 8 ADVANCE", R["cupKicker"].upper())
+        self.assertEqual(sorted(R["cupChips"]), ["SA 1", "SA 2", "SA 3*"])                           # * = a substitute
+        self.assertIn("playing in place of Somebody", R["cupChipTip"])
+        self.assertGreaterEqual(R["cupQ"], 8)                                                          # every row inside the top 8 (a tie at 8 adds more)
+        self.assertEqual(R["cupCut"], 1)
+        self.assertGreaterEqual(R["cupCutAfter"], 8)
+        self.assertFalse(R["plainWrap"])
+        self.assertEqual(R["plainChips"], 0)
 
     def test_the_page_runs_without_errors(self):
         self.assertNotIn("fatal", self.R, self.R)

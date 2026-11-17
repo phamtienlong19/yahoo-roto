@@ -20,8 +20,21 @@ def league_names(root=HERE):
         return {str(k): v for k, v in json.load(f).get("names", {}).items()}
 
 
-def render(page, name=None):
+def league_cups(root=HERE):
+    """The leagues that are cups (leagues.json "cups"): their own copy of the page gets the cup skin and its font from the first byte."""
+    with open(os.path.join(root, "leagues.json"), encoding="utf-8") as f:
+        return {str(k) for k in (json.load(f).get("cups") or {})}
+
+
+CUP_FONT = "&family=Manrope:wght@500;600;700;800"
+
+
+def render(page, name=None, cup=False):
     """The page for one league: its own <title>, description and link-preview tags (chat apps read these without running any JavaScript)."""
+    if cup:
+        page = page.replace('<div class="wrap">', '<div class="wrap cup">', 1)
+        page = page.replace('<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Geist+Mono:wght@500;600;700&display=swap"',
+                            '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Geist+Mono:wght@500;600;700%s&display=swap"' % CUP_FONT, 1)
     if not name:
         return page
     n = _html.escape(name, quote=True)
@@ -36,12 +49,13 @@ def sync(root=HERE):
     with open(os.path.join(root, "index.html"), encoding="utf-8") as f:
         page = f.read()
     names = league_names(root)
+    cups = league_cups(root)
     paths = []
     for lid in league_ids(root):
         os.makedirs(os.path.join(root, lid), exist_ok=True)
         path = os.path.join(root, lid, "index.html")
         with open(path, "w", encoding="utf-8") as f:
-            f.write(render(page, names.get(lid)))
+            f.write(render(page, names.get(lid), lid in cups))
         paths.append(path)
     return paths
 

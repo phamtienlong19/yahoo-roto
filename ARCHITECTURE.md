@@ -15,7 +15,7 @@ Yahoo public pages ──► yahoo_roto.py ──► report.json ──► index
 | `pages.py` | Writes `<league id>/index.html` copies (own title and link preview). A test fails when they are stale: run `python3 pages.py`. |
 | `cadence.py` | How long the live workflow sleeps (fast while totals change, slow when nothing moves), and its failure counting: status file and one-issue-per-outage alerts. |
 | `canary.py` | Daily end-to-end health check against real Yahoo (used by `canary.yml`). |
-| `leagues.json` | League ids, display names, and defending champions. |
+| `leagues.json` | League ids, display names, defending champions, and `cups` (origin league and finish per team, playoff places; `report.json` gets a `cup` key only for those leagues, and the page shows origin chips, a playoff band and a cup header). |
 | `.github/workflows/roto-live.yml` | Keeps `<id>/report.json`, `status.json` and the weekly cache fresh on the orphan `data` branch. |
 | `.github/workflows/test.yml`, `canary.yml` | Tests (Python 3.10 and 3.12, lint, headless-Chrome page tests, workflow lint) and the daily canary. |
 

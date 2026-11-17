@@ -137,6 +137,25 @@ class AllPlayAndReport(unittest.TestCase):
         for bad in (None, "", "nobody", "twin", "99"):                               # unknown, empty, ambiguous, id not in the league: no crown, no error
             self.assertIsNone(yr.resolve_champion(bad, names), bad)
 
+    def test_a_cup_is_resolved_against_the_teams_in_the_league_and_never_raises(self):
+        names = {1: "A", 2: "B", 3: "C"}
+        spec = {"spots": 8, "leagues": {"SA": {"label": "Serie A", "color": "#002060"}},
+                "teams": {"1": {"league": "SA", "rank": 1}, "2": {"league": "SA", "rank": 4, "substitute": "X", "also": ["C1 2"]}, "99": {"league": "SA", "rank": 2}, "3": {"rank": 1}}}
+        cup = yr.resolve_cup(spec, names)
+        self.assertEqual(sorted(cup["teams"]), ["1", "2"])                                           # 99 is not in the league, 3 has no league: skipped
+        self.assertEqual(cup["teams"]["2"], {"league": "SA", "rank": 4, "also": ["C1 2"], "substitute": "X"})
+        self.assertEqual(cup["spots"], 8)
+        self.assertEqual(yr.resolve_cup(spec, names, odds_spots=6)["spots"], 6)                      # the playoff set-up Yahoo reports wins over the config
+        for bad in (None, {}, "x", {"teams": {}}, {"teams": {"99": {"league": "SA"}}}):
+            self.assertIsNone(yr.resolve_cup(bad, names), bad)
+
+    def test_the_cups_block_in_leagues_json_is_read_and_the_super_cup_lists_16_teams(self):
+        cup = yr.configured_cup("212003")
+        self.assertEqual(len(cup["teams"]), 16)
+        self.assertEqual(sorted(cup["teams"], key=int), [str(i) for i in range(1, 17)])
+        self.assertTrue(all(t["league"] in cup["leagues"] for t in cup["teams"].values()))
+        self.assertIsNone(yr.configured_cup("85092"))
+
     def test_a_name_with_a_tagline_or_punctuation_still_matches(self):
         names = {1: "M. Jordat | The Silver Seekers", 2: "sup fam | Crashed for Caleb", 3: "Master Chef", 4: "Other"}
         self.assertEqual(yr.resolve_champion("m jordat", names), 1)                  # punctuation and the tagline are ignored

@@ -1228,6 +1228,41 @@ def configured_champion(league, root=None):
         return None
 
 
+def configured_cup(league, root=None):
+    """The cup set-up for this league in leagues.json ("cups": {"<league id>": {...}}), or None. See resolve_cup for the shape."""
+    try:
+        with open(os.path.join(root or os.path.dirname(os.path.abspath(__file__)), "leagues.json"), encoding="utf-8") as f:
+            return (json.load(f).get("cups") or {}).get(str(league))
+    except (OSError, ValueError):
+        return None
+
+
+def resolve_cup(spec, names, odds_spots=None):
+    """A league that is a cup (teams qualified from other leagues) -> the part of the report the page styles it from, or None.
+    spec: {"spots": playoff places, "leagues": {key: {"label", "color"}}, "teams": {"<team id>": {"league": key, "rank": n, "also": [text], "substitute": text}}}.
+    Teams that are not in the league are skipped with a note; the playoff places come from the odds when they know them. Never raises."""
+    if not isinstance(spec, dict):
+        return None
+    leagues = {str(k): {"label": str(v.get("label") or k), "color": str(v.get("color") or "")} for k, v in (spec.get("leagues") or {}).items() if isinstance(v, dict)}
+    teams = {}
+    for tid, t in (spec.get("teams") or {}).items():
+        if str(tid).isdigit() and int(tid) in names and isinstance(t, dict) and t.get("league"):
+            entry = {"league": str(t["league"])}
+            if isinstance(t.get("rank"), int):
+                entry["rank"] = t["rank"]
+            if t.get("also"):
+                entry["also"] = [str(a) for a in t["also"]]
+            if t.get("substitute"):
+                entry["substitute"] = str(t["substitute"])
+            teams[str(int(tid))] = entry
+        else:
+            print("note: cup team %r is not in the league (or has no league); skipped" % (tid,), file=sys.stderr)
+    if not teams:
+        return None
+    spots = odds_spots if isinstance(odds_spots, int) and odds_spots > 0 else spec.get("spots")
+    return {"spots": spots if isinstance(spots, int) and spots > 0 else None, "leagues": leagues, "teams": teams}
+
+
 def _norm(text):
     """A name for comparing: lower case, punctuation dropped, spaces collapsed ("M. Jordat" == "m jordat")."""
     return " ".join(re.sub(r"[^\w\s]", " ", str(text)).casefold().split())
@@ -1331,12 +1366,16 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
         except Exception as e:                                           # the odds are an extra: whatever goes wrong must not take the report down
             print("note: playoff odds skipped (%s)" % e, file=sys.stderr)
     champ = resolve_champion(champion if champion is not None else configured_champion(league), names)
-    return {"schema": "yahoo-roto-report/2", "schemaVersion": SCHEMA_VERSION, "league": str(league), "champion": champ, "corrections": corrections, "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    cup = resolve_cup(configured_cup(league), names, (odds or {}).get("spots"))
+    doc = {"schema": "yahoo-roto-report/2", "schemaVersion": SCHEMA_VERSION, "league": str(league), "champion": champ, "corrections": corrections, "leagueName": st.get("name"), "sport": sport, "scoring": st["scoring"], "asOf": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "inProgressWeek": weeks_data[-1]["week"] if live else None, "currentWeek": st.get("current_week"), "settling": None if live else settling(weeks_data[-1], t_now),
             "categories": [{"cat": sp["cat"], "lower": sp["lower"], "pct": sp["kind"] == "pct"} for sp in specs],
             "skipped": skipped, "teams": {str(t): names[t] for t in names}, "weeks": [wk["week"] for wk in weeks_data], "views": views,
             "composites": comps,
             "compositesFinal": composites_final, "odds": odds}
+    if cup:
+        doc["cup"] = cup                                                 # only for a cup league: every other report is byte for byte what it was
+    return doc
 
 
 def settling(wk, now):

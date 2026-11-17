@@ -263,6 +263,33 @@ body.static{padding:0;background:#fff}
 body.static .weekbar,body.static .status,body.static nav{display:none}
 body.static .wrap{width:100%}
 body.static .sheet{box-shadow:none;width:100%}
+/* ---- cup skin (leagues.json "cups"): a class on .wrap and .sheet only (never html/body), so saved images keep it. Table shading stays the green/red/white above. ---- */
+.cup{--blue:#1445c4;--cup-sky:#5b8cff;--cup-silver:#c9d3e8;--qband:#1f9d57;font-family:Manrope,Inter,"Noto Sans","Segoe UI",Arial,sans-serif}
+.cup nav button,.cup .strip button,.cup .weekbar .arrow,.cup .status,.cup .st th.team,.cup h1{font-family:Manrope,Inter,"Noto Sans","Segoe UI",Arial,sans-serif}
+.cup nav button.active,.cup .strip button[aria-current=true]{background:linear-gradient(180deg,#1d52e0,#0f2f9a);border-color:#0f2f9a}
+.sheet.cup{box-shadow:0 1px 2px #0a1a4d18,0 10px 32px #0a1a4d1f}
+.cuphead{position:relative;overflow:hidden;margin:calc(-1*clamp(14px,2.9cqw,48px)) calc(-1*clamp(8px,2.6cqw,44px)) clamp(12px,2cqw,28px);padding:clamp(14px,2.4cqw,38px) clamp(12px,2.6cqw,44px) clamp(14px,2.4cqw,36px);border-radius:var(--radius) var(--radius) 0 0;text-align:center;
+ background:radial-gradient(120% 150% at 50% -30%,#2a50c4 0%,#12287a 38%,#0a1a4d 64%,#050e33 100%)}
+.cuphead::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#1b5bff,#9fb8ff,#fff,#9fb8ff,#1b5bff)}
+.cuphead>*{position:relative}
+.cuphead .ring{position:absolute;top:50%;height:150%;aspect-ratio:1;opacity:.16;pointer-events:none}
+.cuphead .ring.l{left:0;transform:translate(-52%,-50%)}.cuphead .ring.r{right:0;transform:translate(52%,-50%) rotate(22.5deg)}
+.cuphead .ring svg{width:100%;height:100%;display:block}
+.sheet.cup .cuphead .kicker{font-weight:800;letter-spacing:.3em;text-transform:uppercase;font-size:clamp(9px,1.05cqw,16px);color:#9fb8ff;margin:0 0 .6em}
+.sheet.cup .cuphead h1{color:#fff;font-weight:800}
+.sheet.cup .cuphead .view-subtitle{color:var(--cup-silver);margin:.4em auto 0;font-weight:600}
+.sheet.cup .cuphead .holders{display:inline-flex;align-items:center;gap:.4em;margin-top:.9em;padding:.28em .9em;border-radius:999px;background:#ffffff1a;box-shadow:inset 0 0 0 1px #ffffff33;color:#fff;font-weight:700;font-size:clamp(10px,1.25cqw,18px)}
+.sheet.cup .cuphead .holders span{color:#9fb8ff;font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:.8em}
+.lgchip{display:inline-flex;align-items:center;flex:none;margin-left:.4em;padding:.1em .5em;border-radius:999px;background:var(--chip,#0a1a4d);color:#fff;font:800 .64em/1.4 Manrope,Inter,"Noto Sans","Segoe UI",Arial,sans-serif;letter-spacing:.05em;text-transform:uppercase;box-shadow:inset 0 0 0 1px #ffffff40;white-space:nowrap;vertical-align:middle}
+.lgchip.sub{box-shadow:inset 0 0 0 1px #ffffff40,0 0 0 1.5px var(--chip,#0a1a4d)}
+.cup .st th.team.q::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--qband)}
+.cup .st th.team.me.q::before{left:4px}
+.cup .st tr.cut>*{border-bottom:2px dashed var(--cup-sky)}
+.cupkey{margin:1.1em auto 0;max-width:62em;text-align:center;font-size:clamp(11px,1.15cqw,15px);line-height:1.5;color:#486075;font-weight:600}
+.cupkey .lgchip{margin:0 .2em}.cupkey .qb{display:inline-block;width:3px;height:1em;background:var(--qband);vertical-align:-.15em;margin:0 .25em}.cupkey .cl{display:inline-block;width:1.6em;border-top:2px dashed var(--cup-sky);vertical-align:.3em;margin:0 .25em}
+html[data-theme=dark] .cup{--qband:#3fbf7a;--blue:#4f84ff}
+html[data-theme=dark] .sheet.cup .cuphead h1{color:#fff}
+html[data-theme=dark] .cupkey{color:#aab8c7}
 @media print{.fh{display:none!important}.how{display:none}body{padding:0;background:#fff}.weekbar,.status,nav{display:none}.sheet{box-shadow:none}}
 </style>
 </head>
@@ -592,13 +619,16 @@ function drawNav(){var nav=$("nav");nav.textContent="";nav.className="";
 
 /* ---- sheets ---- */
 function sheet(kind,title,sub,body,note,shade){
- var inner=[h("h1",{text:title}),h("div",{class:"view-subtitle",text:sub})];
+ var c=cup(),inner=[h("h1",{text:title}),h("div",{class:"view-subtitle",text:sub})];
+ if(c){var n=Object.keys(DOC.teams).length,rl=h("div",{class:"ring l"}),rr=h("div",{class:"ring r"});rl.innerHTML=rr.innerHTML=STAR_RING;
+  inner=[h("div",{class:"cuphead"},[rl,rr,h("div",{class:"kicker",text:lg()+" \u00b7 "+n+" teams"+(c.spots?" \u00b7 top "+c.spots+" advance":"")}),inner[0],inner[1]].concat(DOC.champion!=null?[h("div",{class:"holders"},[h("span",{text:"Holders"}),name(DOC.champion),crownEl()])]:[]))];}
  if(note&&!STATIC){var dt=h("details",{class:"how"},[h("summary",{text:"How to read this"}),h("p",{text:note})]);if(S.how)dt.open=true;dt.addEventListener("toggle",function(){S.how=dt.open;});inner.push(dt);}
  inner=inner.concat(body);
  if(shade)inner.push(h("div",{class:"shadenote",text:shade}));
  if(note&&STATIC)inner.push(h("div",{class:"note",text:note}));
+ if(c)inner.push(h("div",{class:"cupkey"},[h("span",{class:"lgchip",style:"--chip:#002060",text:"SA 1"})," = the league a team qualified from and its finish there (* playing in place of the qualifier) \u00b7 ",h("i",{class:"qb"}),c.spots?"green edge = inside the top "+c.spots:"",h("i",{class:"cl"}),"playoff cut (division winners can also qualify)"]));
  if(STATIC){var a=asOf();inner.push(h("div",{class:"stamp",text:(S.season?"Season":"Week "+weekNo())+(cur()&&(S.season||weekNo()===cur())?" (in progress) · as of "+a.text:" · final"+(settleNote(weekNo())?" · "+settleNote(weekNo()):""))}));}
- return h("section",{class:"sheet "+kind},[h("div",{class:"in"},inner)]);}
+ return h("section",{class:"sheet "+kind+(c?" cup":"")},[h("div",{class:"in"},inner)]);}
 function scroller(t){return h("div",{class:"tscroll",tabindex:"0",role:"region","aria-label":"Table, scrolls sideways"},[t]);}
 var TIPS={"Rank":"1 = best; tied teams share a place (T-5 = tied for 5th)","Win%":"Wins plus half the ties, divided by games","All-Play":"Your record against every team this week","Categories":"Won-lost-tied against this opponent"};
 function th(t,c,tip){return h("th",{class:c||null,text:t,title:tip||TIPS[t]||null});}
@@ -609,14 +639,33 @@ function setMe(id){id=String(id);ME=ME===id?"":id;ME_URL=true;try{if(ME)localSto
 function pinnable(el,id){if(STATIC)return el;el.setAttribute("data-id",String(id));el.setAttribute("tabindex","0");el.classList.add("pin");
  el.addEventListener("click",function(ev){if(ev.target.closest&&ev.target.closest("a"))return;setMe(id);});
  el.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();ev.stopPropagation();setMe(id);}});return el;}
+/* Cup playoff band: a green edge on the team cell of every row whose own Rank cell is inside the top `spots`, and a dashed cut line under the last such row while the table is in rank order. */
+function markCup(){[].forEach.call(document.querySelectorAll("th.team.q,tr.cut"),function(x){x.classList.remove("q","cut");});var c=cup();if(!c||!c.spots)return;
+ [].forEach.call(document.querySelectorAll(".sheet table.st"),function(tb){if(tb.classList.contains("mu")||!tb.tHead||!tb.tBodies[0])return;var hr=tb.tHead.rows[tb.tHead.rows.length-1],ci=-1,i;
+  [].forEach.call(hr.cells,function(x,j){if(ci<0&&x.textContent.trim()==="Rank")ci=j;});if(ci<0)return;
+  var rows=[].slice.call(tb.tBodies[0].rows),rk=rows.map(function(r){var m=/\d+/.exec(r.cells[ci]&&r.cells[ci].textContent);return m?+m[0]:null;}),mono=true,last=-1;
+  rows.forEach(function(r,j){var t=r.cells[0];if(rk[j]!=null&&rk[j]<=c.spots&&t&&t.classList.contains("team"))t.classList.add("q");});
+  for(i=1;i<rk.length;i++)if(rk[i]==null||rk[i-1]==null||rk[i]<rk[i-1]){mono=false;break;}
+  if(mono)for(i=0;i<rk.length-1;i++)if(rk[i]<=c.spots&&rk[i+1]>c.spots)last=i;
+  if(last>=0)rows[last].classList.add("cut");});}
 function markMe(){[].forEach.call(document.querySelectorAll("th.me"),function(x){if(x.parentNode)x.parentNode.classList.add("me-row");});}
 /* Defending champion: a crown after the name (the emoji on the page; a drawn crown in saved images, so it looks the same on any machine). Config: leagues.json "champions". */
 var CROWN_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 18.5 1.5 7l5.6 4.2L12 4l4.9 7.2L22.5 7l-1 11.5z" fill="#f5b301" stroke="#a87400" stroke-width="1.4" stroke-linejoin="round"/><rect x="2.5" y="19.5" width="19" height="2.6" rx="1" fill="#a87400"/></svg>';
 function isChamp(id){return !!DOC&&DOC.champion!=null&&String(DOC.champion)===String(id);}
 function crownEl(){var e=h("span",{class:"crown",title:"Defending champion","aria-label":"Defending champion"});if(STATIC)e.innerHTML=CROWN_SVG;else e.textContent="\uD83D\uDC51";return e;}
-function nameNodes(id){return isChamp(id)?[h("span",{class:"nm"},[h("span",{class:"t",text:name(id)}),crownEl()])]:[name(id)];}   /* the crown sits outside the ellipsis, so a long name cannot push it out */
+/* Cup leagues (leagues.json "cups"): a chip with the league a team qualified from and its finish there ("SA 1"); * = playing in place of the team that qualified. */
+var STAR_RING=(function(){var o="",i,a,x,y;for(i=0;i<8;i++){a=i*Math.PI/4-Math.PI/2;x=50+38*Math.cos(a);y=50+38*Math.sin(a);o+='<path transform="translate('+x.toFixed(2)+' '+y.toFixed(2)+') rotate('+(i*45)+')" d="M0-6.2 1.8-1.9 6.4-1.9 2.7 1 4 5.6 0 2.9-4 5.6-2.7 1-6.4-1.9-1.8-1.9z" fill="#fff"/>';}return '<svg viewBox="0 0 100 100" aria-hidden="true">'+o+'</svg>';})();
+function cup(){return DOC&&DOC.cup||null;}
+function cupInfo(id){var c=cup();return c&&c.teams&&c.teams[String(id)]||null;}
+function ordinal(n){var m=n%100,t=n%10;return n+(m>=11&&m<=13?"th":t===1?"st":t===2?"nd":t===3?"rd":"th");}
+function chipTip(id){var i=cupInfo(id),l=i&&cup().leagues&&cup().leagues[i.league]||{};if(!i)return "";
+ return (l.label||i.league)+(i.rank!=null?", "+ordinal(i.rank)+" place":"")+(i.substitute?" · playing in place of "+i.substitute:"")+(i.also&&i.also.length?" · also qualified as "+i.also.join(", "):"");}
+function chipEl(id){var i=cupInfo(id);if(!i)return null;var l=cup().leagues&&cup().leagues[i.league]||{},t=chipTip(id);
+ return h("span",{class:"lgchip"+(i.substitute?" sub":""),title:t,"aria-label":t,style:l.color?"--chip:"+l.color:null},[i.league+(i.rank!=null?" "+i.rank:"")+(i.substitute?"*":"")]);}
+function nameNodes(id){var ch=chipEl(id),champ=isChamp(id);if(!ch&&!champ)return [name(id)];
+ var k=[h("span",{class:"t",text:name(id)})];if(champ)k.push(crownEl());if(ch)k.push(ch);return [h("span",{class:"nm"},k)];}   /* the crown and chip sit outside the ellipsis, so a long name cannot push them out */
 function nameInline(id){return isChamp(id)?[name(id)," ",crownEl()]:[name(id)];}
-function tip(id){return name(id)+(isChamp(id)?" · defending champion":"");}
+function tip(id){return name(id)+(isChamp(id)?" · defending champion":"")+(cupInfo(id)?" · "+chipTip(id):"");}
 function teamTh(id,extra){var nn=nameNodes(id);return pinnable(h("th",{class:"team"+(String(id)===ME?" me":""),title:tip(id)+(STATIC?"":" · "+TAP+" to highlight your team")},extra?[h("span",{class:"nn"},nn),extra]:nn),id);}
 function table(heads,rows,groups,cls){var tr=h("tr"),gr=null;if(groups){gr=h("tr",{class:"grp"});groups.forEach(function(g){gr.appendChild(h("th",{colspan:g[1],class:g[2]||null},[h("span",{text:g[0]})]));});}heads.forEach(function(x,i){tr.appendChild(typeof x==="string"?th(x,i===0?"team":null):th(x[0],x[1],x[2]));});
  return h("table",{class:"st"+(cls?" "+cls:"")},[h("thead",null,gr?[gr,tr]:[tr]),h("tbody",null,rows)]);}
@@ -896,7 +945,7 @@ function wireSort(){var tb=document.querySelector(".tscroll table.st,.tscroll ta
  [].forEach.call(th.cells,function(c,i){if(mx&&i<th.cells.length-2)return;c.classList.add("sortable");c.setAttribute("tabindex","0");
   var go=function(){var id=sortId(),sc=S.sort&&S.sort.id===id&&S.sort.col===i?S.sort:null,txt=P.sortKey(tb.tBodies[0].rows[0]&&tb.tBodies[0].rows[0].cells[i].textContent)==null,first=txt?"asc":"desc";
    if(!sc)S.sort={id:id,col:i,dir:first};else if(sc.dir===first)S.sort={id:id,col:i,dir:first==="asc"?"desc":"asc"};else S.sort=null;
-   applySort(tb);floatHead();pushUrl();};
+   applySort(tb);markCup();floatHead();pushUrl();};
   c.addEventListener("click",go);c.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();go();}});c.__go=go;});
  applySort(tb);}
 function renderKeep(){var y=window.scrollY,xs=[].map.call(document.querySelectorAll(".tscroll"),function(e){return e.scrollLeft;}),ns=$("nav")?$("nav").scrollLeft:0;
@@ -905,7 +954,7 @@ function render(){var main=$("main");main.textContent="";if(!DOC)return;
  document.title=lg()+" · roto";
  main.appendChild(S.season?seasonSheet():weekSheet());
  drawStrip();drawStatus();drawFixes();drawNav();pushUrl();
- try{document.body.setAttribute("data-ready","1");}catch(e){}fitStatic();measure();wireSort();markMe();floatHead();}
+ try{document.body.setAttribute("data-ready","1");}catch(e){}fitStatic();measure();wireSort();markMe();markCup();floatHead();}
 /* Sticky column headers. A CSS sticky <thead> cannot work here: the tables sit in a horizontal scroll box, which also becomes their vertical scroll
    container. So a copy of the header is pinned to the top of the window (outside .sheet, whose container-type would capture position:fixed) while the
    real header is scrolled out of view; it follows the table's horizontal scroll. Not used for the PNG export (static mode). */
@@ -947,7 +996,7 @@ function inRange(spec,set){return spec.split(",").some(function(p){var m=p.trim(
 function dataUrl(u){return FONTDATA[u]||(FONTDATA[u]=fetch(u).then(function(r){if(!r.ok)throw 0;return r.blob();}).then(function(b){return new Promise(function(ok,no){var f=new FileReader();f.onload=function(){ok(f.result);};f.onerror=no;f.readAsDataURL(b);});}));}
 function fontFaceCss(sample){ /* @font-face rules for the characters the sheet uses (e.g. Vietnamese names need that subset); "" when offline, then system fonts are used */
  var set={};for(var i=0;i<sample.length;i++)set[sample.charCodeAt(i)]=1;
- FONTSRC=FONTSRC||fetch("https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Geist+Mono:wght@500;600;700&display=swap").then(function(r){if(!r.ok)throw 0;return r.text();});
+ FONTSRC=FONTSRC||fetch("https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Geist+Mono:wght@500;600;700"+(cup()?"&family=Manrope:wght@500;600;700;800":"")+"&display=swap").then(function(r){if(!r.ok)throw 0;return r.text();});
  return FONTSRC.then(function(css){var blocks=(css.match(/@font-face\s*\{[^}]*\}/g)||[]).filter(function(b){var u=b.match(/unicode-range:\s*([^;]+);/);return !u||inRange(u[1],set);});
   return Promise.all(blocks.map(function(b){var m=b.match(/url\((https:[^)]+)\)/);return m?dataUrl(m[1]).then(function(d){return b.replace(m[1],d);}):b;}));}).then(function(a){return a.join("\n");},function(){FONTSRC=null;return "";});}
 function renderStatic(){ /* synchronous: the sheet in static mode at export width -> {w,h,markup,css}; the page is put back before the browser can paint */
@@ -997,10 +1046,13 @@ function initRange(){var m=S.range,f=DOC.weeks[0],L=lastWeek(),a,b;S.range=null;
  if(m){a=Math.max(f,Math.min(L,+m[1]));b=Math.max(f,Math.min(L,+m[2]));if(a>b){var x=a;a=b;b=x;}S.range=[a,b];}
  else if(S.snap==="final"&&hasFinal())S.range=[f,doneWeek()];else if(S.snap==="live")S.range=[f,L];
  if(S.range&&!canRange()&&!(S.range[0]===f&&(S.range[1]===L||(hasFinal()&&S.range[1]===doneWeek()))))S.range=null;}
+var CUPFONT="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap";
+function cupMode(){var w=document.querySelector(".wrap");if(w)w.classList.toggle("cup",!!cup());     /* a cup league: the cup skin; Manrope is loaded here when the page was not built with it (pages.py bakes it into the league's own copy) */
+ if(cup()&&!document.querySelector('link[href*="Manrope"]')){var l=document.createElement("link");l.rel="stylesheet";l.href=CUPFONT;document.head.appendChild(l);}}
 function accept(d){if(!d||!d.views||!d.views.season||!d.composites)throw new Error("not a roto report file (schema 2)");
  if(d.schemaVersion&&d.schemaVersion>SCHEMA)throw new Error("This page is older than the report format ("+d.schemaVersion+"). Reload the page to update it.");
  var k=JSON.stringify(d);if(DOC&&k===LAST){drawStatus();return;}      /* a refresh with nothing new must not redraw (it would reset the reader's scroll) */
- LAST=k;var first=!DOC;DOC=d;RC={};CLC={};SCC={};RKC={};if(first){loadMe();initRange();}if(first)render();else renderKeep();}
+ LAST=k;var first=!DOC;DOC=d;cupMode();RC={};CLC={};SCC={};RKC={};if(first){loadMe();initRange();}if(first)render();else renderKeep();}
 function srcFor(){if(SRC)return SRC;return LEAGUE&&REPO?"https://raw.githubusercontent.com/"+REPO+"/data/"+LEAGUE+"/report.json":"report.json";}
 function load(){if(window.__REPORT__){try{accept(window.__REPORT__);}catch(e){fail(String(e.message||e));}return;}
  if(!SRC&&!LEAGUE&&REPO&&!STATIC){   /* the bare homepage: open the first league in leagues.json (each league has its own address, <site>/<id>/) */

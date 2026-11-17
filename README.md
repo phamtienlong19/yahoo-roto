@@ -49,6 +49,7 @@ This repo is the setup: GitHub Pages serves the page, and the `Roto live` workfl
 4. Run the "Roto live" workflow once (Actions tab). It keeps itself running.
 
 To show a defending champion's crown, add `"champions": {"<league id>": "<team name or team id>"}` to `leagues.json`.
+Cup leagues (teams qualified from elsewhere) take a `cups` entry: see ARCHITECTURE.md.
 
 ## Keeping it fresh
 - The feed refreshes about every 3 minutes while games are being played, and slows down when nothing changes.
