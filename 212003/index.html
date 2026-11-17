@@ -105,6 +105,9 @@ html[data-theme=dark] .st td.lvl{background:#4a3a14;color:#f2c97a}html[data-them
 .chips span{font-family:var(--mono);display:inline-block;min-width:1.9em;padding:.12em .3em;border-radius:.3em;font-size:.78em;font-weight:700;background:#fff;border:1px solid #e6ebef}
 .chips span.green-strong{background:var(--green-strong);color:#164629}.chips span.green-soft{background:var(--green-soft);color:#27543b}
 .chips span.red-strong{background:var(--red-strong);color:#662d38}.chips span.red-soft{background:var(--red-soft);color:#72404a}
+.chips span.dark-green{background:var(--dark-green);color:#143f27}.chips span.green{background:var(--green);color:#1d4a31}.chips span.light-green{background:var(--light-green);color:#27543b}
+.chips span.light-red{background:var(--light-red);color:#6a3d46}.chips span.red{background:var(--red);color:#6d3641}.chips span.dark-red{background:var(--dark-red);color:#5b2430}.chips span.none{color:#97a5b3;background:transparent;border-style:dashed}
+.st td.chipc{padding-left:.5em;padding-right:.5em}
 .small{display:block;font-size:.6em;font-weight:600;opacity:.75}
 .note{font-size:clamp(11px,1.07cqw,18px);color:#6a7785;text-align:center;margin-top:1.1em;line-height:1.4}
 .shadenote{font-size:clamp(11px,1.07cqw,18px);color:#6a7785;text-align:center;margin-top:.9em;line-height:1.4}
@@ -196,6 +199,8 @@ html[data-theme=dark] .st thead th.team,html[data-theme=dark] .st tbody tr:nth-c
 html[data-theme=dark] .st tbody tr:nth-child(even) th.team{background:#1b232c}
 html[data-theme=dark] .st th.team.me{box-shadow:inset 4px 0 0 #4aa3e8,1px 0 0 #232d38}
 html[data-theme=dark] .st td.green-strong,html[data-theme=dark] .chips span.green-strong{color:#d8f5e3}html[data-theme=dark] .st td.green-soft,html[data-theme=dark] .chips span.green-soft{color:#bfe8cf}
+html[data-theme=dark] .chips span.dark-green{color:#d8f5e3}html[data-theme=dark] .chips span.green{color:#d0f0dc}html[data-theme=dark] .chips span.light-green{color:#bfe8cf}
+html[data-theme=dark] .chips span.light-red{color:#f3c8d0}html[data-theme=dark] .chips span.red{color:#ffdbe2}html[data-theme=dark] .chips span.dark-red{color:#ffdbe2}
 html[data-theme=dark] .st td.red-strong,html[data-theme=dark] .chips span.red-strong{color:#ffdbe2}html[data-theme=dark] .st td.red-soft,html[data-theme=dark] .chips span.red-soft{color:#f3c8d0}
 html[data-theme=dark] .st thead tr.grp th{color:#7f90a2}html[data-theme=dark] .st thead tr.grp th span{border-bottom-color:#2d3945}
 html[data-theme=dark] .st th.sep,html[data-theme=dark] .st td.sep{border-left-color:#3a4b5d}
@@ -391,6 +396,19 @@ function sumRec(list){var r=[0,0,0];list.forEach(function(x){if(x){r[0]+=x[0];r[
 var ONE={W:[1,0,0],L:[0,1,0],T:[0,0,1]};
 function realGame(v,basis){if(!v||v.opp==null||v.result==null)return null;return basis==="cats"?v.catRecord:ONE[v.result];}
 function realSum(wk,t,ws,basis){var r=[0,0,0],g=0;ws.forEach(function(w){var x=realGame(wk[t]&&wk[t][w],basis);if(x){r[0]+=x[0];r[1]+=x[1];r[2]+=x[2];g++;}});return {record:r,pct:apPct(r),games:g};}
+/* The opponent of every team in every week, rated by how strong that opponent is: its real record over the weeks `ws` (basis "matchups" or "cats", the same measure as SOS), ranked
+   across the league (1 = strongest; `place` is the average place of the teams level on it, which colours ties fairly). Played weeks come from the results; with `schedule` ({week: [[a, b], ...]}) the weeks still to come (a week without a known pairing has opp null).
+   -> {team: [{week, opp, rank, place}]} */
+function oppByWeek(doc,ws,basis,schedule){
+ var ids=Object.keys(doc.teams).map(Number).sort(function(a,b){return a-b;}),wk=doc.composites.weekly,pc={},rank={},place={},out={},q=function(x){return Math.round(x*1e9);};
+ ids.forEach(function(t){pc[t]=realSum(wk,t,ws,basis).pct;});
+ ids.forEach(function(t){rank[t]=pc[t]==null?null:1+ids.filter(function(j){return pc[j]!=null&&q(pc[j])>q(pc[t]);}).length;
+  place[t]=pc[t]==null?null:rank[t]+(ids.filter(function(j){return pc[j]!=null&&q(pc[j])===q(pc[t]);}).length-1)/2;});
+ ids.forEach(function(t){out[t]=[];});
+ if(schedule){Object.keys(schedule).map(Number).sort(function(a,b){return a-b;}).forEach(function(w){var opp={};(schedule[w]||[]).forEach(function(p){opp[p[0]]=p[1];opp[p[1]]=p[0];});
+   ids.forEach(function(t){var o=opp[t]==null?null:opp[t];out[t].push({week:w,opp:o,rank:o==null?null:rank[o],place:o==null?null:place[o]});});});}
+ else ids.forEach(function(t){ws.forEach(function(w){var v=wk[t]&&wk[t][w];if(v&&v.opp!=null&&v.result!=null)out[t].push({week:w,opp:v.opp,rank:rank[v.opp],place:place[v.opp]});});});
+ return out;}
 /* Recent form: the real record over the last n of the given weeks against the same measure over all of them (basis "matchups": weekly matchup results; "cats": categories won).
    `earned` is what the stats said over the last n weeks: the all-play Win% of the same weeks. -> {team: {last:{record,pct}, season:{record,pct}, change, earned}} */
 function form(doc,ws,n,basis){
@@ -415,7 +433,7 @@ function movers(prev,cur,min,k){
  var up=list.filter(function(x){return x.delta>=min;}).sort(function(a,b){return b.delta-a.delta||a.id-b.id;}).slice(0,k),
   down=list.filter(function(x){return x.delta<=-min;}).sort(function(a,b){return a.delta-b.delta||a.id-b.id;}).slice(0,k);
  return {up:up,down:down};}
-return {range:range,realGame:realGame,movers:movers,sos:sos,sosRest:sosRest,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
+return {range:range,realGame:realGame,oppByWeek:oppByWeek,movers:movers,sos:sos,sosRest:sosRest,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
 })();
 </script>
 <script>
@@ -647,7 +665,13 @@ function matrixSheet(v,title,sub,week){var ids=v.allPlayOrder,nw=v.weeks.length,
 function sTitle(b){return /^Season/.test(b)?lg()+" "+b+", "+span(sv()):lg()+" "+b+" "+span(sv()).replace("Weeks ","Season, Weeks ");}
 function tl(r,all){return P.tl(r,all);}
 function orderBy(map,key){return Object.keys(map).sort(function(a,b){return map[a][key]-map[b][key]||a-b;});}
-function chips(arr,n){return h("span",{class:"chips"},arr.map(function(r){return h("span",{class:P.rankCls(r,n),text:String(r)});}));}
+/* A row of small squares, one per week or opponent. Items are ranks (shaded by the rank rule) or {text, cls, title} (cls is one of the same green / white / red shades). */
+function chips(arr,n){return h("span",{class:"chips"},arr.map(function(r){var o=typeof r==="object"&&r!==null;
+  return h("span",{class:o?r.cls:P.rankCls(r,n),title:o&&r.title?r.title:null,text:o?r.text:String(r)});}));}
+function chipTd(items,n,sortBy){var td_=h("td",{class:"wide chipc"},[chips(items,n)]);td_.setAttribute("data-sort",sortBy==null?"":String(sortBy));return td_;}
+function avgOf(a){var v=a.filter(function(x){return typeof x==="number";});return v.length?v.reduce(function(x,y){return x+y;},0)/v.length:null;}
+function weekRanksOf(ids,ws,key){var out={};ids.forEach(function(i){out[i]=[];});ws.forEach(function(w){var m={};ids.forEach(function(i){var v=comp().weekly[i][w];m[i]=v?v[key]:null;});
+  ids.forEach(function(i){out[i].push(m[i]==null?null:1+ids.filter(function(j){return m[j]!=null&&m[j]>m[i];}).length);});});return out;}
 function luckCls(x,k){k=k||1;return x==null?"mid":x>=0.5*k?"green-strong":x>0.15*k?"green-soft":x<=-0.5*k?"red-strong":x<-0.15*k?"red-soft":"mid";}   /* one week's luck: matchup result minus the all-play Win% */
 var CLC={},SCC={};function sosData(){var rest=period()==="rest",k=(rest?"rest":C_key())+basis();return SCC[k]||(SCC[k]=rest?P.sosRest(DOC,DOC.weeks,DOC.odds.schedule,basis()):P.sos(DOC,comp().weeks,basis()));}
 function cr(m,ids){var o={};ids.forEach(function(i){o[i]=1+ids.filter(function(j){return m[j]!=null&&(m[i]==null||m[j]>m[i]+1e-9);}).length;});return o;}
@@ -718,15 +742,13 @@ function boardSheet(b){var banner=null,tfull=null,moversEl=null,acc=null,C=comp(
   RK=o.map(function(i){return map[i].rank;});return o;}
  function rl(r){return tl(r,RK);}
  function rk(o,map){var m={};o.forEach(function(i){m[i]=map[i].rank;});return m;}
- if(b==="weekly"){title="Weekly Roto Points";var o=ob(C.weeklyRoto),W=C.weeklyRoto,ws=C.weeks,av={},colw={};o.forEach(function(i){av[i]=W[i].avg;});var cr_=shadeCol(o,rk(o,W),true);
-  ws.forEach(function(w){var m={};o.forEach(function(i){m[i]=C.weekly[i][w].total;});colw[w]=shadeCol(o,m);});
-  heads=["Team"].concat(ws.map(function(w){return [wkl(w),null,"Roto points in "+wkl(w)+"; colours rank the teams within that week"];}),[["Points","sep","Each week's roto points, added up"],["Per week",null,"Average roto points per week"],["Rank","sep"]]);
-  rows=o.map(function(id){var r=W[id];return h("tr",null,[teamTh(id)].concat(ws.map(function(w){var v=C.weekly[id][w];return td(v?P.fmtPts(v.total):"–","cat "+(v?colw[w][id]:"mid"));}),[td(P.fmtPts(r.sum),"sep"),td(r.avg.toFixed(2),""),td(rl(r.rank),"rank sep "+cr_[id])]));});
-  groups=[["",1],["Roto points by week",ws.length,"sep"],["Season",3,"sep"]];
-  note="Each week's roto points. In every week the best team is dark green and the worst dark red, so a colour tells you how a team did that week, not how it is doing overall.";}
- else if(b==="allplay"){title="Season All-Play";var o=ob(C.seasonAllPlay),A=C.seasonAllPlay,pv={};o.forEach(function(i){pv[i]=A[i].winPct;});var cw=shadeCol(o,pv),cr_=shadeCol(o,rk(o,A),true);heads=["Team",["W-L-T",null,"Wins, losses and ties against every team, every week"],["Win%",null,"Wins plus half the ties, divided by games"],["Rank"]];
-  rows=o.map(function(id){var r=A[id];return h("tr",null,[teamTh(id),td(r.record.join("-")),td(P.pct(r.winPct),cw[id]),td(rl(r.rank),"rank "+cr_[id])]);});
-  note="All-play: each week you play every team once and win by taking more categories. It shows how good your stats are, whoever you actually faced.";}
+ if(b==="weekly"){title="Weekly Roto Points";var o=ob(C.weeklyRoto),W=C.weeklyRoto,pt={},av={};o.forEach(function(i){pt[i]=W[i].sum;av[i]=W[i].avg;});var cp=shadeCol(o,pt),cr_=shadeCol(o,rk(o,W),true);
+  heads=["Team",["Points",null,"Each week's roto points, added up"],["Per week",null,"Average roto points per week"],["Rank each week",null,"One square per week: that week's roto rank (green good, red bad)"],["Rank"]];
+  rows=o.map(function(id){var r=W[id];return h("tr",null,[teamTh(id),td(P.fmtPts(r.sum),"total "+cp[id]),td(r.avg.toFixed(2),""),chipTd(r.weekRanks.map(function(x,k){return {text:String(x),cls:P.rankCls(x,n),title:wkl(C.weeks[k])+": "+ord(x)+" of "+n};}),n,avgOf(r.weekRanks)),td(rl(r.rank),"rank "+cr_[id])]);});
+  note="Roto points added up over the weeks. Each square is one week, starting with "+wkl(C.weeks[0])+": the team's roto rank that week, shaded like every ranking.";}
+ else if(b==="allplay"){title="Season All-Play";var o=ob(C.seasonAllPlay),A=C.seasonAllPlay,pv={};o.forEach(function(i){pv[i]=A[i].winPct;});var cw=shadeCol(o,pv),cr_=shadeCol(o,rk(o,A),true);var apr=weekRanksOf(o,C.weeks,"winPct");heads=["Team",["W-L-T",null,"Wins, losses and ties against every team, every week"],["Win%",null,"Wins plus half the ties, divided by games"],["Rank each week",null,"One square per week: that week's all-play rank, starting with "+wkl(C.weeks[0])],["Rank"]];
+  rows=o.map(function(id){var r=A[id];return h("tr",null,[teamTh(id),td(r.record.join("-")),td(P.pct(r.winPct),cw[id]),chipTd(apr[id].map(function(x,k){return x==null?{text:"–",cls:"none"}:{text:String(x),cls:P.rankCls(x,n),title:wkl(C.weeks[k])+": "+ord(x)+" of "+n};}),n,avgOf(apr[id])),td(rl(r.rank),"rank "+cr_[id])]);});
+  note="All-play: each week you play every team once and win by taking more categories. It shows how good your stats are, whoever you actually faced. Each square is one week's all-play rank.";}
  else if(b==="real"){var BS=basis(),cm=BS==="cats",ids=Object.keys(C.realRecord),RR=C.realRecord,CL=C.catLuck||{},rv={},ev={},lk={};
   ids.forEach(function(i){rv[i]=cm?CL[i].real:RR[i].realWins;ev[i]=cm?CL[i].expected:RR[i].expectedWins;lk[i]=rv[i]-ev[i];});
   var rr=cr(rv,ids),er=cr(ev,ids),gp={},o=ids.slice().sort(function(a,c){return rr[a]-rr[c]||ev[c]-ev[a]||a-c;});ids.forEach(function(i){gp[i]=er[i]-rr[i];});
@@ -788,8 +810,10 @@ function boardSheet(b){var banner=null,tfull=null,moversEl=null,acc=null,C=comp(
  else if(b==="sos"){var BS=basis(),cm=BS==="cats",rest=period()==="rest",ids=Object.keys(C.realRecord),SO=sosData(),pv={};ids.forEach(function(i){pv[i]=SO[i].pct;});
   var o=ids.slice().sort(function(a,c){return (pv[c]==null?-1:pv[c])-(pv[a]==null?-1:pv[a])||a-c;}),SR=cr(pv,ids),SRL=o.map(function(i){return SR[i];}),cs=shadeCol(o,pv,true),csr=shadeCol(o,SR,false);
   title="Strength of Schedule";sub=rest?"The opponents still to come, by their record through "+wkl(lastWeek())+(lastWeek()>doneWeek()?" (live)":""):"How good the opponents each team faced were";if(rest)tfull=lg()+" Strength of Schedule: Rest of Season";
-  heads=["Team",["Opponents' record",null,"Their combined "+(cm?"category":"matchup")+" record"+(rest?" so far":"")],["SOS",null,"Opponents' win %"],["Rank",null,"1 = toughest schedule"]];
-  rows=o.map(function(id){var r=SO[id];return h("tr",null,[teamTh(id),td(r.pct==null?"–":r.record.join("-")),td(P.pct(r.pct),"total "+cs[id]),td(r.pct==null?"–":tl(SR[id],SRL),"rank "+csr[id])]);});
+  var OB=rest?P.oppByWeek(DOC,DOC.weeks,BS,DOC.odds.schedule):P.oppByWeek(DOC,C.weeks,BS);
+  heads=["Team",["Opponents' record",null,"Their combined "+(cm?"category":"matchup")+" record"+(rest?" so far":"")],["SOS",null,"Opponents' win %"],["Rank",null,"1 = toughest schedule"],["Opponents by week",null,"One square per week: opponent strength (red = strong, green = weak)"]];
+  rows=o.map(function(id){var r=SO[id];return h("tr",null,[teamTh(id),td(r.pct==null?"–":r.record.join("-")),td(P.pct(r.pct),"total "+cs[id]),td(r.pct==null?"–":tl(SR[id],SRL),"rank "+csr[id]),
+   chipTd(OB[id].map(function(x){return x.rank==null?{text:"–",cls:"none",title:wkl(x.week)+": opponent not known yet"}:{text:String(x.rank),cls:P.rankCls(n+1-x.place,n),title:wkl(x.week)+" vs "+name(x.opp)+": "+ord(x.rank)+" strongest of "+n};}),n,avgOf(OB[id].map(function(x){return x.rank;})))]);});
   note=rest?"SOS = how often the opponents still to come have won so far, counting every game they played, including the week in progress as it stands. Red = tougher run-in, green = easier. It covers the weeks from the one in progress to the end of the regular season."
    :"SOS = how often the opponents you faced have won, counting every game they played. Red = tougher schedule, green = easier. Early in the season each opponent has played only a few games, so expect big swings.";}
  else if(b==="matchlog"){title="Matchup Log";var items=[],ids=[],cols={wp:{},ow:{},lk:{}};
@@ -803,10 +827,10 @@ function boardSheet(b){var banner=null,tfull=null,moversEl=null,acc=null,C=comp(
   if(!N||ws.length<3)return sheet("data",lg()+" Recent Form",sub,[h("div",{class:"msg"},[h("b",{text:"Not enough weeks yet"}),"Recent form needs at least 3 finished weeks."])],null);
   var F=P.form(DOC,ws,N,BS),ids=Object.keys(F),lm={},sm={},cm_={};ids.forEach(function(i){lm[i]=F[i].last.pct;sm[i]=F[i].season.pct;cm_[i]=F[i].change;});
   var o=ids.slice().sort(function(a,c){return (lm[c]-lm[a])||(sm[c]-sm[a])||a-c;}),sl=shadeCol(o,lm),sc=shadeCol(o,cm_);
-  heads=["Team",["Last "+N,null,"Real "+unit+" record over the last "+N+" finished weeks"],["Win%",null,"Wins plus half the ties, divided by games, over the last "+N+" weeks"],["Season Win%",null,"The same over all finished weeks"],["Change (pts)",null,"Last "+N+" minus season, in percentage points: positive = improving"],["Stats said",null,"All-play Win% over the last "+N+" weeks: what the stats earned, whoever you faced"],["Week by week",null,"Your result in each of these weeks"]];
-  rows=o.map(function(id){var r=F[id];return h("tr",null,[teamTh(id),td(r.last.record.join("-")),td(P.pct(r.last.pct),"total "+sl[id]),td(P.pct(r.season.pct)),td(P.pts(r.change),"total "+sc[id]),td(P.pct(r.earned)),td(ws.slice(-N).map(function(w){var v=DOC.composites.weekly[id][w];return !v||v.result==null?"–":cm?v.catRecord[0]+"-"+v.catRecord[1]:v.result;}).join(" "),"small")]);});
+  heads=["Team",["Last "+N,null,"Real "+unit+" record over the last "+N+" finished weeks"],["Win%",null,"Wins plus half the ties, divided by games, over the last "+N+" weeks"],["Season Win%",null,"The same over all finished weeks"],["Change (pts)",null,"Last "+N+" minus season, in percentage points: positive = improving"],["Stats said",null,"All-play Win% over the last "+N+" weeks: what the stats earned, whoever you faced"],["Week by week",null,"One square per week: green = won, red = lost, darker = a bigger margin"]];
+  rows=o.map(function(id){var r=F[id];return h("tr",null,[teamTh(id),td(r.last.record.join("-")),td(P.pct(r.last.pct),"total "+sl[id]),td(P.pct(r.season.pct)),td(P.pts(r.change),"total "+sc[id]),td(P.pct(r.earned)),chipTd(ws.slice(-N).map(function(w){var v=DOC.composites.weekly[id][w];if(!v||v.result==null)return {text:"–",cls:"none",title:wkl(w)+": not played"};var c=v.catRecord,mg=c[0]-c[1];mg=v.result==="W"?Math.max(mg,1):v.result==="L"?Math.min(mg,-1):0;return {text:cm?c[0]+"-"+c[1]:v.result,cls:P.matrixCls(mg),title:wkl(w)+": "+(v.result==="W"?"won":v.result==="L"?"lost":"tied")+" "+c[0]+"-"+c[1]+" vs "+name(v.opp)};}),n,r.last.pct)]);});
   title="Recent Form · Last "+N+" weeks";
-  note="Win% counts your real "+unit+" over the last "+N+" weeks. Change = that minus the whole season, so a positive number means a team is improving. Stats said is the all-play Win% of the same weeks: if it sits above the real Win%, the stats earned more than the results show.";}
+  note="Win% counts your real "+unit+" over the last "+N+" weeks. Change = that minus the whole season, so a positive number means a team is improving. Squares are weeks (darker = bigger margin). Stats said is the all-play Win% of the same weeks: if it sits above the real Win%, the stats earned more than the results show.";}
  else if(b==="split"){var ws=C.weeks,BS=basis(),cm=BS==="cats",unit=cm?"categories":"matchups",thin=cm?2:3,SP=P.split(DOC,ws,BS),ids=Object.keys(SP).filter(function(k){return k!=="order";}),n2=Math.floor(ids.length/2),sv_={},wv_={};
   ids.forEach(function(i){sv_[i]=SP[i].strong.games>=thin?SP[i].strong.pct:null;wv_[i]=SP[i].weak.games>=thin?SP[i].weak.pct:null;});
   var o=ids.slice().sort(function(a,c){return ((sv_[c]==null?-1:sv_[c])-(sv_[a]==null?-1:sv_[a]))||a-c;}),cs=shadeCol(o,sv_),cw=shadeCol(o,wv_);
@@ -860,7 +884,7 @@ function sortId(){return S.season?"s:"+boardOf()+(boardOf()==="form"?":"+winN():
 function applySort(tb){var th=tb.tHead.rows[tb.tHead.rows.length-1],body=tb.tBodies[0],rows=[].slice.call(body.rows),sc=S.sort&&S.sort.id===sortId()?S.sort:null;
  [].forEach.call(th.cells,function(c,i){if(sc&&sc.col===i)c.setAttribute("aria-sort",sc.dir==="asc"?"ascending":"descending");else c.removeAttribute("aria-sort");});
  rows.sort(function(a,b){var o=(+a.getAttribute("data-o"))-(+b.getAttribute("data-o"));if(!sc)return o;
-  var x=a.cells[sc.col].textContent,y=b.cells[sc.col].textContent,kx=P.sortKey(x),ky=P.sortKey(y),c;
+  var x=a.cells[sc.col].getAttribute("data-sort")||a.cells[sc.col].textContent,y=b.cells[sc.col].getAttribute("data-sort")||b.cells[sc.col].textContent,kx=P.sortKey(x),ky=P.sortKey(y),c;
   if(kx!=null&&ky!=null)c=kx-ky;else if(kx!=null)c=-1;else if(ky!=null)c=1;else c=x.localeCompare(y);   /* numbers before text; a missing value sorts last either way */
   if(c===0)return o;return sc.dir==="asc"?c:-c;});
  rows.forEach(function(r){body.appendChild(r);});}
