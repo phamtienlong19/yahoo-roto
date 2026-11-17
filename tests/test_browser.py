@@ -109,6 +109,13 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  R.legendFull=!!p.d.querySelector('.legend.full');R.meline=!!p.d.querySelector('.meline');
  p=await load('week=3&view=stats');await save(p,'stats.png');
  p=await load('season=1&board=power');await save(p,'power.png');
+ p=await load('week=4&view=roto','cup/');R.cupWrap=p.d.querySelector('.wrap').classList.contains('cup');R.cupSheet=p.d.querySelectorAll('.sheet.cup').length;R.cupHead=p.d.querySelectorAll('.cuphead h1').length;R.cupKicker=txt(p.d.querySelector('.cuphead .kicker'));
+ R.cupChips=[].slice.call(p.d.querySelectorAll('.st th.team .lgchip')).map(function(e){return e.textContent});R.cupChipTip=(p.d.querySelector('.st th.team .lgchip.sub')||{}).title;R.cupBand=p.d.querySelectorAll('.st th.team.q,.st tr.cut').length;R.cupKey=p.d.querySelectorAll('.cupkey').length;
+ R.rb=p.d.querySelectorAll('.st td .rb').length;R.rbGold=[].slice.call(p.d.querySelectorAll('.st td .rb.gold')).map(function(e){return e.textContent});R.lead=p.d.querySelectorAll('.st th.team.lead').length;R.tro=p.d.querySelectorAll('.holders .tro svg').length;
+ p=await load('season=1&board=outlook&lens=race','cup/');R.raceLenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg button')).map(txt);R.raceH1=txt(p.d.querySelector('h1'));R.raceRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.raceIn=p.d.querySelectorAll('.tscroll .st tbody tr.in').length;R.raceEdge=p.d.querySelectorAll('.tscroll .st tbody th.team.q').length;
+ R.raceStatus=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody td.status')).map(txt);R.raceLeaders=R.raceStatus.filter(function(x){return /leader/.test(x)}).length;
+ p=await load('season=1&board=outlook');R.plainLenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg button')).map(txt);
+ p=await load('week=4&view=roto');R.plainWrap=p.d.querySelector('.wrap').classList.contains('cup');R.plainChips=p.d.querySelectorAll('.lgchip,.cuphead,.cupkey,.rb,th.team.q,th.team.lead,tr.cut,.holders').length;
  R.errors=errors;
 }catch(e){R.fatal=String(e&&e.message||e);R.errors=errors}
 document.getElementById('out').textContent=JSON.stringify(R);document.title='done';})();
@@ -144,6 +151,12 @@ class Browser(unittest.TestCase):
             for t in v["teams"].values():
                 t.pop("raw", None)
         yr.write_html(old, os.path.join(cls.site, "old"))
+        cls.spots = main["odds"]["spots"]
+        cup = json.loads(json.dumps(main))                                                                 # a cup league: three teams qualified from Serie A (one by a substitute), spots = 8
+        ids = sorted(cup["teams"], key=int)
+        cup["cup"] = {"spots": 8, "leagues": {"SA": {"label": "Serie A", "color": "#002060"}},
+                      "teams": {ids[0]: {"league": "SA", "rank": 1}, ids[1]: {"league": "SA", "rank": 2, "also": ["C1 3"]}, ids[2]: {"league": "SA", "rank": 3, "substitute": "Somebody"}}}
+        yr.write_html(cup, os.path.join(cls.site, "cup"))
         with open(os.path.join(cls.site, "t.html"), "w", encoding="utf-8") as f:
             f.write(HARNESS)
         cls.posted = {}
@@ -169,6 +182,28 @@ class Browser(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.shutdown()
         cls.tmp.cleanup()
+
+    def test_a_cup_league_gets_the_cup_skin_chips_band_and_cut_line_and_a_normal_league_does_not(self):
+        R = self.R
+        self.assertTrue(R["cupWrap"])
+        self.assertEqual((R["cupSheet"], R["cupHead"], R["cupKey"]), (1, 1, 1))
+        self.assertIn("TOP 8 ADVANCE", R["cupKicker"].upper())
+        self.assertEqual(sorted(R["cupChips"]), ["SA 1", "SA 2", "SA 3*"])                           # * = a substitute
+        self.assertIn("playing in place of Somebody", R["cupChipTip"])
+        self.assertEqual(R["cupBand"], 0)                                                              # roto rank does not decide the playoffs: no band or cut line on the roto tables
+        self.assertGreater(R["rb"], 0)                                                                 # Rank cells are league-table badges
+        self.assertTrue(R["rbGold"] and all(t.endswith("1") for t in R["rbGold"]))                     # gold only for 1st (a tie reads T-1)
+        self.assertGreaterEqual(R["lead"], 1)
+        self.assertEqual(R["tro"], 1)
+        self.assertIn("Playoff race", R["raceLenses"])
+        self.assertIn("Playoff Race", R["raceH1"])
+        self.assertEqual(R["raceRows"], 18)
+        self.assertEqual((R["raceIn"], R["raceEdge"]), (self.spots, self.spots))               # exactly the playoff places are in
+        self.assertEqual(len(R["raceStatus"]), 18)
+        self.assertGreaterEqual(R["raceLeaders"], 1)                                                   # division leaders are named
+        self.assertNotIn("Playoff race", R["plainLenses"])                                             # a normal league never sees the board
+        self.assertFalse(R["plainWrap"])
+        self.assertEqual(R["plainChips"], 0)
 
     def test_the_page_runs_without_errors(self):
         self.assertNotIn("fatal", self.R, self.R)

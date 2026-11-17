@@ -14,10 +14,11 @@ class LeaguePages(unittest.TestCase):
             page = f.read()
         ids = pages.league_ids(ROOT)
         names = pages.league_names(ROOT)
+        cups = pages.league_cups(ROOT)
         self.assertTrue(ids)
         for lid in ids:
             with open(os.path.join(ROOT, lid, "index.html"), encoding="utf-8") as f:
-                self.assertEqual(f.read(), pages.render(page, names.get(lid)), "%s/index.html is out of date: run python3 pages.py" % lid)
+                self.assertEqual(f.read(), pages.render(page, names.get(lid), lid in cups), "%s/index.html is out of date: run python3 pages.py" % lid)
 
     def test_each_league_page_has_its_own_title_and_preview_tags(self):
         names = pages.league_names(ROOT)
@@ -28,6 +29,14 @@ class LeaguePages(unittest.TestCase):
             self.assertIn("<title>%s \u00b7 Roto standings</title>" % name, html)
             self.assertIn('<meta property="og:title" content="%s">' % name, html)
             self.assertEqual(html.count("<title>"), 1)
+
+    def test_a_cup_league_page_is_built_with_the_cup_skin_and_its_font(self):
+        for lid in pages.league_ids(ROOT):
+            with open(os.path.join(ROOT, lid, "index.html"), encoding="utf-8") as f:
+                html = f.read()
+            is_cup = lid in pages.league_cups(ROOT)
+            self.assertEqual('<div class="wrap cup">' in html, is_cup, lid)
+            self.assertEqual("family=Manrope" in html.split("<style>")[0], is_cup, lid)
 
     def test_names_are_html_escaped(self):
         out = pages.render("<!--meta--><title>x</title><!--/meta-->", 'A "B" <i>')

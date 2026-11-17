@@ -16,5 +16,120 @@
     "85092": "m jordat",
     "207464": "sup fam",
     "212003": "master chef"
+  },
+  "cups": {
+    "212003": {
+      "spots": 8,
+      "leagues": {
+        "SC": {
+          "label": "Super Cup holders",
+          "color": "#9A6700"
+        },
+        "PL": {
+          "label": "Premier League",
+          "color": "#7030A0"
+        },
+        "SA": {
+          "label": "Serie A",
+          "color": "#002060"
+        },
+        "RSL": {
+          "label": "RSL",
+          "color": "#ED7D31"
+        },
+        "BUND": {
+          "label": "Bundesliga",
+          "color": "#C00000"
+        },
+        "VL": {
+          "label": "V-League",
+          "color": "#00B050"
+        },
+        "DYN": {
+          "label": "Dynasty",
+          "color": "#0070C0"
+        }
+      },
+      "teams": {
+        "3": {
+          "league": "SC",
+          "rank": 1,
+          "also": [
+            "Bundesliga 3",
+            "C1"
+          ]
+        },
+        "15": {
+          "league": "PL",
+          "rank": 1
+        },
+        "10": {
+          "league": "PL",
+          "rank": 2
+        },
+        "9": {
+          "league": "PL",
+          "rank": 3
+        },
+        "12": {
+          "league": "PL",
+          "rank": 4,
+          "also": [
+            "C1 2"
+          ]
+        },
+        "11": {
+          "league": "SA",
+          "rank": 1
+        },
+        "6": {
+          "league": "SA",
+          "rank": 2
+        },
+        "2": {
+          "league": "SA",
+          "rank": 3
+        },
+        "16": {
+          "league": "SA",
+          "rank": 4,
+          "substitute": "TO KINH"
+        },
+        "7": {
+          "league": "RSL",
+          "rank": 1
+        },
+        "8": {
+          "league": "RSL",
+          "rank": 2
+        },
+        "1": {
+          "league": "RSL",
+          "rank": 3,
+          "also": [
+            "C1 3"
+          ]
+        },
+        "13": {
+          "league": "BUND",
+          "rank": 1
+        },
+        "4": {
+          "league": "BUND",
+          "rank": 2
+        },
+        "14": {
+          "league": "VL",
+          "rank": 1,
+          "also": [
+            "RSL"
+          ]
+        },
+        "5": {
+          "league": "DYN",
+          "rank": 1
+        }
+      }
+    }
   }
 }
