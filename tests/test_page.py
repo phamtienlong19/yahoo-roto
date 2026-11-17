@@ -34,6 +34,25 @@ class Page(unittest.TestCase):
                 out = subprocess.run(["node", "--check", path], capture_output=True, text=True, timeout=30)
                 self.assertEqual(out.returncode, 0, "script %d: %s" % (i, out.stderr))
 
+    def test_playoff_field_is_division_leaders_then_the_best_of_the_rest(self):
+        teams = "[{id:'1',points:30,div:'East',tb:5},{id:'2',points:28,div:'East',tb:3},{id:'3',points:26,div:'West',tb:2},{id:'4',points:25,div:'East',tb:1},{id:'5',points:10,div:'West',tb:-9}]"
+        got = js("RotoPure.qualifiers(%s,3,true)" % teams)
+        self.assertEqual(got["order"], ["1", "2", "3", "4", "5"])
+        self.assertEqual(sorted(got["in"]), ["1", "2", "3"])                                          # East leader 1, West leader 3, then the best of the rest: 2
+        self.assertEqual(got["leader"], {"1": "East", "3": "West"})
+        # a division leader far below the line still gets in, and takes a place from a higher non-leader
+        got = js("RotoPure.qualifiers(%s,2,true)" % teams)
+        self.assertEqual(sorted(got["in"]), ["1", "3"])
+        self.assertEqual(sorted(got["leader"]), ["1", "3"])
+        got = js("RotoPure.qualifiers([{id:'1',points:9,div:'East'},{id:'2',points:8,div:'East'},{id:'3',points:1,div:'West'}],2,true)")
+        self.assertEqual(sorted(got["in"]), ["1", "3"])                                               # 2 has more points than 3 but 3 leads the West
+        # no divisions: plain top N, ties broken by tb then id; a tie with the line is flagged
+        got = js("RotoPure.qualifiers([{id:'1',points:9,tb:1},{id:'2',points:8,tb:5},{id:'3',points:8,tb:2},{id:'4',points:3,tb:0}],2,false)")
+        self.assertEqual(got["order"], ["1", "2", "3", "4"])
+        self.assertEqual(sorted(got["in"]), ["1", "2"])
+        self.assertEqual(sorted(got["level"]), ["2", "3"])                                            # 2 and 3 are level on points at the line
+        self.assertEqual(js("RotoPure.qualifiers([{id:'1',points:5}],3,true)")["in"], {"1": True})   # fewer teams than places
+
     def test_movers_are_the_biggest_rises_and_falls_of_at_least_the_threshold(self):
         got = js("RotoPure.movers({1:0.50,2:0.40,3:0.30,4:0.20,5:0.10,6:0.5},{1:0.70,2:0.55,3:0.29,4:0.05,5:0.31,7:0.9},0.02,2)")
         self.assertEqual([m["id"] for m in got["up"]], ["5", "1"])                                  # +21 and +20; team 2 (+15) would be third

@@ -270,7 +270,7 @@ body.static .sheet{box-shadow:none;width:100%}
 .sheet.cup{box-shadow:0 1px 2px #0a1a4d18,0 10px 32px #0a1a4d1f}
 .cuphead{position:relative;overflow:hidden;margin:calc(-1*clamp(14px,2.9cqw,48px)) calc(-1*clamp(8px,2.6cqw,44px)) clamp(12px,2cqw,28px);padding:clamp(14px,2.4cqw,38px) clamp(12px,2.6cqw,44px) clamp(14px,2.4cqw,36px);border-radius:var(--radius) var(--radius) 0 0;text-align:center;
  background:radial-gradient(120% 150% at 50% -30%,#2a50c4 0%,#12287a 38%,#0a1a4d 64%,#050e33 100%)}
-.cuphead::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#1b5bff,#9fb8ff,#fff,#9fb8ff,#1b5bff)}
+.cuphead::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#1b5bff,#9fb8ff 30%,#f3d27a 50%,#9fb8ff 70%,#1b5bff)}
 .cuphead>*{position:relative}
 .cuphead .ring{position:absolute;top:50%;height:150%;aspect-ratio:1;opacity:.16;pointer-events:none}
 .cuphead .ring.l{left:0;transform:translate(-52%,-50%)}.cuphead .ring.r{right:0;transform:translate(52%,-50%) rotate(22.5deg)}
@@ -282,14 +282,26 @@ body.static .sheet{box-shadow:none;width:100%}
 .sheet.cup .cuphead .holders span{color:#9fb8ff;font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:.8em}
 .lgchip{display:inline-flex;align-items:center;flex:none;margin-left:.4em;padding:.1em .5em;border-radius:999px;background:var(--chip,#0a1a4d);color:#fff;font:800 .64em/1.4 Manrope,Inter,"Noto Sans","Segoe UI",Arial,sans-serif;letter-spacing:.05em;text-transform:uppercase;box-shadow:inset 0 0 0 1px #ffffff40;white-space:nowrap;vertical-align:middle}
 .lgchip.sub{box-shadow:inset 0 0 0 1px #ffffff40,0 0 0 1.5px var(--chip,#0a1a4d)}
-.cup .st th.team.q::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--qband)}
-.cup .st th.team.me.q::before{left:4px}
+.cup .st th.team.q::before,.cup .st th.team.lead::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--qband)}
+.cup .st th.team.lead::before{background:linear-gradient(180deg,#f3d27a,#c9972b)}
+.cup .st th.team.me.q::before,.cup .st th.team.me.lead::before{left:4px}
 .cup .st tr.cut>*{border-bottom:2px dashed var(--cup-sky)}
+.rb{display:inline-flex;align-items:center;justify-content:center;min-width:1.9em;height:1.9em;padding:0 .35em;border-radius:.45em;background:#0a1a4d;color:#fff;font-weight:800;box-shadow:inset 0 0 0 1px #ffffff26}
+.rb.gold{background:linear-gradient(180deg,#f6dc8a,#c9972b);color:#3b2a00;box-shadow:0 0 0 1px #b8861b}
+.cup .st td.status{font-size:.8em;font-weight:800;letter-spacing:.03em;text-transform:uppercase}
+.sheet.cup .cuphead .holders .tro{display:inline-flex;width:1.25em;height:1.25em}.cuphead .holders .tro svg{width:100%;height:100%}
+.wrap.cup::before{content:"";position:fixed;left:0;right:0;top:0;height:min(460px,70vh);z-index:-1;pointer-events:none;background:linear-gradient(180deg,#0a1a4d 0,#0a1a4d 4px,transparent 4px),radial-gradient(85% 70% at 50% 0,#1b5bff2e,#0a1a4d12 55%,transparent 100%)}
+.cuphead::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(105deg,transparent 0 46px,#ffffff09 46px 92px),linear-gradient(105deg,transparent 35%,#ffffff22 50%,transparent 65%);background-size:auto,250% 100%;background-position:0 0,150% 0}
+@keyframes cupshine{0%,55%{background-position:0 0,150% 0}100%{background-position:0 0,-50% 0}}
+@media (prefers-reduced-motion:no-preference){.cuphead::before{animation:cupshine 9s ease-in-out infinite}}
+body.static .cuphead::before{animation:none}
 .cupkey{margin:1.1em auto 0;max-width:62em;text-align:center;font-size:clamp(11px,1.15cqw,15px);line-height:1.5;color:#486075;font-weight:600}
 .cupkey .lgchip{margin:0 .2em}.cupkey .qb{display:inline-block;width:3px;height:1em;background:var(--qband);vertical-align:-.15em;margin:0 .25em}.cupkey .cl{display:inline-block;width:1.6em;border-top:2px dashed var(--cup-sky);vertical-align:.3em;margin:0 .25em}
 html[data-theme=dark] .cup{--qband:#3fbf7a;--blue:#4f84ff}
 html[data-theme=dark] .sheet.cup .cuphead h1{color:#fff}
 html[data-theme=dark] .cupkey{color:#aab8c7}
+html[data-theme=dark] .wrap.cup::before{background:linear-gradient(180deg,#1b5bff 0,#1b5bff 4px,transparent 4px),radial-gradient(85% 70% at 50% 0,#1b5bff40,#0a1a4d40 55%,transparent 100%)}
+@media print{.wrap.cup::before{display:none}}
 @media print{.fh{display:none!important}.how{display:none}body{padding:0;background:#fff}.weekbar,.status,nav{display:none}.sheet{box-shadow:none}}
 </style>
 </head>
@@ -460,7 +472,17 @@ function movers(prev,cur,min,k){
  var up=list.filter(function(x){return x.delta>=min;}).sort(function(a,b){return b.delta-a.delta||a.id-b.id;}).slice(0,k),
   down=list.filter(function(x){return x.delta<=-min;}).sort(function(a,b){return a.delta-b.delta||a.id-b.id;}).slice(0,k);
  return {up:up,down:down};}
-return {range:range,realGame:realGame,oppByWeek:oppByWeek,movers:movers,sos:sos,sosRest:sosRest,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
+/* Playoff field if the season ended now, by the odds simulation's own rule: with divisions every division's leader (best points) gets a place, then the best of the rest fill the places up to `spots`; without divisions, the top `spots`.
+   teams: [{id, points, div, tb}] (tb breaks level points) -> {order: ids best first, in: {id: true}, leader: {id: division}, level: {id: true}} (level: a team tied on points with the line, so in or out is a coin flip). */
+function qualifiers(teams,spots,useDiv){
+ var order=teams.slice().sort(function(a,b){return (b.points-a.points)||((b.tb||0)-(a.tb||0))||(+a.id-+b.id);}),leader={},inSet={},seen={},lead=[],count=0,level={};
+ if(useDiv)order.forEach(function(t){if(t.div!=null&&!seen[t.div]){seen[t.div]=1;lead.push(t);}});
+ lead.slice(0,spots).forEach(function(t){leader[t.id]=t.div;inSet[t.id]=true;count++;});
+ order.forEach(function(t){if(!inSet[t.id]&&count<spots){inSet[t.id]=true;count++;}});
+ var inN=order.filter(function(t){return inSet[t.id]&&!leader[t.id];}),outT=order.filter(function(t){return !inSet[t.id];});
+ if(inN.length&&outT.length&&outT[0].points===inN[inN.length-1].points){var edge=outT[0].points;order.forEach(function(t){if(t.points===edge&&!leader[t.id])level[t.id]=true;});}
+ return {order:order.map(function(t){return t.id;}),in:inSet,leader:leader,level:level};}
+return {range:range,realGame:realGame,oppByWeek:oppByWeek,movers:movers,qualifiers:qualifiers,sos:sos,sosRest:sosRest,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
 })();
 </script>
 <script>
@@ -474,7 +496,7 @@ var COARSE=!!(window.matchMedia&&matchMedia("(pointer:coarse)").matches),TAP=COA
  TABS=[["standings","Standings",[["roto","Season Roto","roto"],["totals","Raw Totals","totals"],["weekly","Weekly Roto Points","weekly"],["power","Power Rank","power"]]],      /* [tab, label, [[view, label, board id]]]: a tab shows one board at a time */
   ["allplay","All-Play",[["matrix","Matrix","matrix"],["record","Season All-Play","allplay"]]],
   ["luck","Luck",[["summary","Summary","real"],["week","By week","luckweek"],["cat","By category","luckcat"],["log","Matchup Log","matchlog"]]],
-  ["outlook","Outlook",[["odds","Playoff odds","odds"],["sos","Strength of schedule","sos"]]],
+  ["outlook","Outlook",[["race","Playoff race","race"],["odds","Playoff odds","odds"],["sos","Strength of schedule","sos"]]],
   ["performance","Performance",[["form","Recent form","form"],["split","Vs strong / weak","split"],["trends","Trends","trends"],["kings","Category Kings","kings"]]]],
  ALIAS={roto:["standings","roto"],totals:["standings","totals"],weekly:["standings","weekly"],power:["standings","power"],matrix:["allplay","matrix"],allplay:["allplay","record"],real:["luck","summary"],luck:["luck","week"],
   luckweeks:["luck","week"],catluck:["luck","cat"],matchlog:["luck","log"],kings:["performance","kings"],boom:["performance","form"],form:["performance","form"],split:["performance","split"],records:["performance","form"],performance:["performance","form"],sos:["outlook","sos"],odds:["outlook","odds"],outlook:["outlook","odds"]},      /* every board link ever shipped (?board=roto, ?board=real ...) still opens the same table */
@@ -517,7 +539,8 @@ function lg(){return DOC.leagueName||("Yahoo league "+DOC.league);}
 function span(v){var w=v.weeks;return w.length>1?"Weeks "+w[0]+"-"+w[w.length-1]:"Week "+w[0];}
 
 /* ---- URL state ---- */
-function lensList(t){var tab=TABS.filter(function(x){return x[0]===t;})[0]||TABS[0];return tab[2].filter(function(l){return l[0]!=="cat"||!DOC||!!(DOC.composites&&DOC.composites.catLuck);});}
+function raceOK(){return !!(cup()&&DOC.odds&&DOC.odds.teams&&DOC.odds.spots);}   /* the Playoff race board: cup leagues with playoff odds only */
+function lensList(t){var tab=TABS.filter(function(x){return x[0]===t;})[0]||TABS[0];return tab[2].filter(function(l){return (l[0]!=="cat"||!DOC||!!(DOC.composites&&DOC.composites.catLuck))&&(l[0]!=="race"||raceOK());});}
 function finished(){return DOC.weeks.filter(function(w){return w<=doneWeek();});}   /* weeks that are over */
 function winOptions(){var n=finished().length;return [3,5,8].filter(function(k){return k<=n;});}
 function winN(){var o=winOptions();return o.indexOf(S.win)>=0?S.win:(o[0]||0);}
@@ -621,12 +644,12 @@ function drawNav(){var nav=$("nav");nav.textContent="";nav.className="";
 function sheet(kind,title,sub,body,note,shade){
  var c=cup(),inner=[h("h1",{text:title}),h("div",{class:"view-subtitle",text:sub})];
  if(c){var n=Object.keys(DOC.teams).length,rl=h("div",{class:"ring l"}),rr=h("div",{class:"ring r"});rl.innerHTML=rr.innerHTML=STAR_RING;
-  inner=[h("div",{class:"cuphead"},[rl,rr,h("div",{class:"kicker",text:lg()+" \u00b7 "+n+" teams"+(c.spots?" \u00b7 top "+c.spots+" advance":"")}),inner[0],inner[1]].concat(DOC.champion!=null?[h("div",{class:"holders"},[h("span",{text:"Holders"}),name(DOC.champion),crownEl()])]:[]))];}
+  inner=[h("div",{class:"cuphead"},[rl,rr,h("div",{class:"kicker",text:lg()+" \u00b7 "+n+" teams"+(c.spots?" \u00b7 top "+c.spots+" advance":"")}),inner[0],inner[1]].concat(DOC.champion!=null?[h("div",{class:"holders"},[trophyEl(),h("span",{text:"Holders"}),name(DOC.champion),crownEl()])]:[]))];}
  if(note&&!STATIC){var dt=h("details",{class:"how"},[h("summary",{text:"How to read this"}),h("p",{text:note})]);if(S.how)dt.open=true;dt.addEventListener("toggle",function(){S.how=dt.open;});inner.push(dt);}
  inner=inner.concat(body);
  if(shade)inner.push(h("div",{class:"shadenote",text:shade}));
  if(note&&STATIC)inner.push(h("div",{class:"note",text:note}));
- if(c)inner.push(h("div",{class:"cupkey"},[h("span",{class:"lgchip",style:"--chip:#002060",text:"SA 1"})," = the league a team qualified from and its finish there (* playing in place of the qualifier) \u00b7 ",h("i",{class:"qb"}),c.spots?"green edge = inside the top "+c.spots:"",h("i",{class:"cl"}),"playoff cut (division winners can also qualify)"]));
+ if(c)inner.push(h("div",{class:"cupkey"},[h("span",{class:"lgchip",style:"--chip:#002060",text:"SA 1"})," = the league a team qualified from and its finish there (* playing in place of the qualifier)"]));
  if(STATIC){var a=asOf();inner.push(h("div",{class:"stamp",text:(S.season?"Season":"Week "+weekNo())+(cur()&&(S.season||weekNo()===cur())?" (in progress) · as of "+a.text:" · final"+(settleNote(weekNo())?" · "+settleNote(weekNo()):""))}));}
  return h("section",{class:"sheet "+kind+(c?" cup":"")},[h("div",{class:"in"},inner)]);}
 function scroller(t){return h("div",{class:"tscroll",tabindex:"0",role:"region","aria-label":"Table, scrolls sideways"},[t]);}
@@ -639,15 +662,14 @@ function setMe(id){id=String(id);ME=ME===id?"":id;ME_URL=true;try{if(ME)localSto
 function pinnable(el,id){if(STATIC)return el;el.setAttribute("data-id",String(id));el.setAttribute("tabindex","0");el.classList.add("pin");
  el.addEventListener("click",function(ev){if(ev.target.closest&&ev.target.closest("a"))return;setMe(id);});
  el.addEventListener("keydown",function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();ev.stopPropagation();setMe(id);}});return el;}
-/* Cup playoff band: a green edge on the team cell of every row whose own Rank cell is inside the top `spots`, and a dashed cut line under the last such row while the table is in rank order. */
-function markCup(){[].forEach.call(document.querySelectorAll("th.team.q,tr.cut"),function(x){x.classList.remove("q","cut");});var c=cup();if(!c||!c.spots)return;
- [].forEach.call(document.querySelectorAll(".sheet table.st"),function(tb){if(tb.classList.contains("mu")||!tb.tHead||!tb.tBodies[0])return;var hr=tb.tHead.rows[tb.tHead.rows.length-1],ci=-1,i;
+/* Cup league: every Rank cell becomes a league-table badge (gold for 1st), and the team in 1st gets a thin gold edge. Runs after each render and sort. */
+function cupPass(){[].forEach.call(document.querySelectorAll("th.team.lead"),function(x){x.classList.remove("lead");});if(!cup())return;
+ [].forEach.call(document.querySelectorAll(".sheet table.st"),function(tb){if(tb.classList.contains("mu")||!tb.tHead||!tb.tBodies[0])return;var hr=tb.tHead.rows[tb.tHead.rows.length-1],ci=-1;
   [].forEach.call(hr.cells,function(x,j){if(ci<0&&x.textContent.trim()==="Rank")ci=j;});if(ci<0)return;
-  var rows=[].slice.call(tb.tBodies[0].rows),rk=rows.map(function(r){var m=/\d+/.exec(r.cells[ci]&&r.cells[ci].textContent);return m?+m[0]:null;}),mono=true,last=-1;
-  rows.forEach(function(r,j){var t=r.cells[0];if(rk[j]!=null&&rk[j]<=c.spots&&t&&t.classList.contains("team"))t.classList.add("q");});
-  for(i=1;i<rk.length;i++)if(rk[i]==null||rk[i-1]==null||rk[i]<rk[i-1]){mono=false;break;}
-  if(mono)for(i=0;i<rk.length-1;i++)if(rk[i]<=c.spots&&rk[i+1]>c.spots)last=i;
-  if(last>=0)rows[last].classList.add("cut");});}
+  [].forEach.call(tb.tBodies[0].rows,function(r){var cell=r.cells[ci],m=cell&&/\d+/.exec(cell.textContent),first=!!m&&+m[0]===1,th=r.cells[0];if(!cell)return;
+   if(cell.firstChild&&cell.firstChild.className&&String(cell.firstChild.className).indexOf("rb")===0)cell.firstChild.className="rb"+(first?" gold":"");
+   else{var t=cell.textContent;cell.textContent="";cell.appendChild(h("span",{class:"rb"+(first?" gold":""),text:t}));}
+   if(th&&th.classList.contains("team"))th.classList.toggle("lead",first);});});}
 function markMe(){[].forEach.call(document.querySelectorAll("th.me"),function(x){if(x.parentNode)x.parentNode.classList.add("me-row");});}
 /* Defending champion: a crown after the name (the emoji on the page; a drawn crown in saved images, so it looks the same on any machine). Config: leagues.json "champions". */
 var CROWN_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 18.5 1.5 7l5.6 4.2L12 4l4.9 7.2L22.5 7l-1 11.5z" fill="#f5b301" stroke="#a87400" stroke-width="1.4" stroke-linejoin="round"/><rect x="2.5" y="19.5" width="19" height="2.6" rx="1" fill="#a87400"/></svg>';
@@ -656,6 +678,8 @@ function crownEl(){var e=h("span",{class:"crown",title:"Defending champion","ari
 /* Cup leagues (leagues.json "cups"): a chip with the league a team qualified from and its finish there ("SA 1"); * = playing in place of the team that qualified. */
 var STAR_RING=(function(){var o="",i,a,x,y;for(i=0;i<8;i++){a=i*Math.PI/4-Math.PI/2;x=50+38*Math.cos(a);y=50+38*Math.sin(a);o+='<path transform="translate('+x.toFixed(2)+' '+y.toFixed(2)+') rotate('+(i*45)+')" d="M0-6.2 1.8-1.9 6.4-1.9 2.7 1 4 5.6 0 2.9-4 5.6-2.7 1-6.4-1.9-1.8-1.9z" fill="#fff"/>';}return '<svg viewBox="0 0 100 100" aria-hidden="true">'+o+'</svg>';})();
 function cup(){return DOC&&DOC.cup||null;}
+var TROPHY_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v5.2a5 5 0 0 1-10 0z" fill="#f3d27a" stroke="#a87400" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 5H4.2v1.6A3.2 3.2 0 0 0 7.4 10M17 5h2.8v1.6a3.2 3.2 0 0 1-3.2 3.4" fill="none" stroke="#c9972b" stroke-width="1.5" stroke-linecap="round"/><path d="M12 13.2V17" stroke="#a87400" stroke-width="1.6"/><path d="M9 17h6l.8 4H8.2z" fill="#c9972b" stroke="#a87400" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+function trophyEl(){var e=h("i",{class:"tro","aria-hidden":"true"});e.innerHTML=TROPHY_SVG;return e;}
 function cupInfo(id){var c=cup();return c&&c.teams&&c.teams[String(id)]||null;}
 function ordinal(n){var m=n%100,t=n%10;return n+(m>=11&&m<=13?"th":t===1?"st":t===2?"nd":t===3?"rd":"th");}
 function chipTip(id){var i=cupInfo(id),l=i&&cup().leagues&&cup().leagues[i.league]||{};if(!i)return "";
@@ -834,6 +858,21 @@ function boardSheet(b){var banner=null,tfull=null,moversEl=null,acc=null,C=comp(
   groups=[["",1],["Totals",3,"tot"],["Luck by category",cats.length,"sep"],["",1,"sep"]];
   note="Each category column is categories won minus categories your stats earned, over the weeks. +1.0 in PTS means one more PTS win than your stats earned.";}
  else if(b==="trends"){return trendSheet();}
+ else if(b==="race"){title="Playoff Race";var O=DOC.odds,T=O.teams,ids=Object.keys(T),RR=C.realRecord,hasDiv=!!O.divisions&&!!O.divisionWinners,
+   fp=function(p){return p>0.995?">99%":p<0.005?"<1%":Math.round(p*100)+"%";},
+   q=P.qualifiers(ids.map(function(i){var c=(RR[i]||{}).catRecord||[0,0,0];return {id:i,points:T[i].points,div:T[i].division||null,tb:c[0]-c[1]};}),O.spots,hasDiv),pm={},cpm={};
+  q.order.forEach(function(i){pm[i]=T[i].points;cpm[i]=T[i].playoff;});var cpp=shadeCol(q.order,pm),cpc=shadeCol(q.order,cpm);
+  heads=["Team"].concat(hasDiv?[["Div",null,"Division: each division's leader makes the playoffs"]]:[],[["Record",null,"Matchups won, lost and tied"],["Categories",null,"Categories won, lost and tied against your actual opponents"],["Points",null,"Category points from the finished weeks: what the playoff odds start from"],["Playoffs",null,"Chance to make the playoffs"],["Status",null,"If the season ended today"]]);
+  var seen=false,gap=false;q.order.forEach(function(i){if(!q.in[i])seen=true;else if(seen)gap=true;});
+  rows=q.order.map(function(id){var r=RR[id]||{},t=T[id],pl=t.playoff,inn=!!q.in[id],st=inn?(q.leader[id]?"In \u00b7 "+q.leader[id]+" leader":"In"):"Out",cls=inn?"green-soft":"red-soft",th=teamTh(id);
+   if(q.level[id]){st="Level at the line";cls="lvl";}
+   if(pl>=0.995)st+=" \u00b7 clinched";else if(pl<=0.005)st+=" \u00b7 out of reach";
+   if(inn)th.classList.add("q");
+   return h("tr",{class:inn?"in":null},[th].concat(hasDiv?[td(t.division||"\u2013","left")]:[],[td(r.record?r.record.join("-"):"\u2013"),td(r.catRecord?r.catRecord.join("-"):"\u2013"),td(String(+t.points.toFixed(1)),"total "+cpp[id]),td(fp(pl),"total "+cpc[id]),td(st,"status "+cls)]));});
+  if(!gap){var last=-1;q.order.forEach(function(i,k){if(q.in[i])last=k;});if(last>=0&&last<rows.length-1)rows[last].classList.add("cut");}   /* a cut line only when the places are contiguous at the top; a division leader below an out team has none */
+  sub="Who would make the playoffs if the season ended today \u00b7 "+O.spots+" places"+(hasDiv?": each division's leader, then the best of the rest":"");
+  note="Points are category points from the finished weeks"+(DOC.inProgressWeek?" (the week in progress is not counted yet)":"")+", the same start the playoff odds use. "+(hasDiv?"Each division's leader gets a place; the rest go to the best teams by points. ":"")+"Level at the line means a team is tied with the last place, so it could go either way. Record and Categories cover the same weeks as the line under the week bar.";
+  shade="Green edge = in the playoff field today. Playoffs = chance to make it, from the simulation on the Playoff odds board.";}
  else if(b==="odds"&&!DOC.odds){return sheet("data",lg()+" Playoff Odds (Monte Carlo)","Chance to make the playoffs",[h("div",{class:"msg"},[h("b",{text:"No playoff odds in this report yet"}),"They appear after the next data refresh. They also need the league's settings page to state its playoffs (for example \"Playoffs: 6 teams - Week 19, 20 and 21\")."])],null);}
  else if(b==="odds"){title="Playoff Odds (Monte Carlo)";var O=DOC.odds,ids=Object.keys(O.teams),T=O.teams,mx=0,fp=function(p){return p>0.995?">99%":p<0.005?"<1%":Math.round(p*100)+"%";},
    pc=function(p){return p>=0.9?"green-strong":p>=0.65?"green-soft":p>0.35?"mid":p>0.1?"red-soft":"red-strong";},hasDiv=!!O.divisions;
@@ -928,7 +967,7 @@ function fitStatic(){if(!STATIC)return;var sc=document.querySelector(".tscroll")
 function measure(){var m=$("hmeta")||h("meta",{id:"hmeta",name:"report-height"}),s=document.querySelector(".sheet");if(!s)return;
  m.setAttribute("content",String(Math.ceil(s.getBoundingClientRect().bottom+window.pageYOffset)));document.head.appendChild(m);}
 /* Click-to-sort: tap a column header; first desc (A-Z for text), then the opposite, then back to the default order. Rows are only reordered in the DOM. */
-var BASISED={real:1,luckweek:1,sos:1,form:1,split:1},NORANGE={odds:1,form:1};   /* NORANGE: the week-range bar does not apply to these views */   /* the views that follow the Matchups | Categories switch */
+var BASISED={real:1,luckweek:1,sos:1,form:1,split:1},NORANGE={odds:1,form:1,race:1};   /* NORANGE: the week-range bar does not apply to these views */   /* the views that follow the Matchups | Categories switch */
 function sortId(){return S.season?"s:"+boardOf()+(boardOf()==="form"?":"+winN():"")+(BASISED[boardOf()]?":"+basis()+(boardOf()==="sos"?":"+period():"")+(boardOf()==="luckweek"?":"+(S.cat||""):""):""):"v:"+viewOf();}             /* a week view keeps its sort when you move to another week */
 function applySort(tb){var th=tb.tHead.rows[tb.tHead.rows.length-1],body=tb.tBodies[0],rows=[].slice.call(body.rows),sc=S.sort&&S.sort.id===sortId()?S.sort:null;
  [].forEach.call(th.cells,function(c,i){if(sc&&sc.col===i)c.setAttribute("aria-sort",sc.dir==="asc"?"ascending":"descending");else c.removeAttribute("aria-sort");});
@@ -945,7 +984,7 @@ function wireSort(){var tb=document.querySelector(".tscroll table.st,.tscroll ta
  [].forEach.call(th.cells,function(c,i){if(mx&&i<th.cells.length-2)return;c.classList.add("sortable");c.setAttribute("tabindex","0");
   var go=function(){var id=sortId(),sc=S.sort&&S.sort.id===id&&S.sort.col===i?S.sort:null,txt=P.sortKey(tb.tBodies[0].rows[0]&&tb.tBodies[0].rows[0].cells[i].textContent)==null,first=txt?"asc":"desc";
    if(!sc)S.sort={id:id,col:i,dir:first};else if(sc.dir===first)S.sort={id:id,col:i,dir:first==="asc"?"desc":"asc"};else S.sort=null;
-   applySort(tb);markCup();floatHead();pushUrl();};
+   applySort(tb);cupPass();floatHead();pushUrl();};
   c.addEventListener("click",go);c.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();go();}});c.__go=go;});
  applySort(tb);}
 function renderKeep(){var y=window.scrollY,xs=[].map.call(document.querySelectorAll(".tscroll"),function(e){return e.scrollLeft;}),ns=$("nav")?$("nav").scrollLeft:0;
@@ -954,7 +993,7 @@ function render(){var main=$("main");main.textContent="";if(!DOC)return;
  document.title=lg()+" · roto";
  main.appendChild(S.season?seasonSheet():weekSheet());
  drawStrip();drawStatus();drawFixes();drawNav();pushUrl();
- try{document.body.setAttribute("data-ready","1");}catch(e){}fitStatic();measure();wireSort();markMe();markCup();floatHead();}
+ try{document.body.setAttribute("data-ready","1");}catch(e){}fitStatic();measure();wireSort();markMe();cupPass();floatHead();}
 /* Sticky column headers. A CSS sticky <thead> cannot work here: the tables sit in a horizontal scroll box, which also becomes their vertical scroll
    container. So a copy of the header is pinned to the top of the window (outside .sheet, whose container-type would capture position:fixed) while the
    real header is scrolled out of view; it follows the table's horizontal scroll. Not used for the PNG export (static mode). */
