@@ -759,7 +759,7 @@ def composites(weeks_data, cores, specs, ids, season):
                 continue
             for sp in specs:
                 x, y = cat_value(c["tot"][t], sp), cat_value(c["tot"][o], sp)
-                if x is None or y is None:
+                if x is None or y is None or sp["cat"] not in expct[t]:      # no attempts yet (a new week), or cat_play left the category out
                     continue
                 cl[t][sp["cat"]][0] += Fraction(cat_result(x, y, sp) + 1, 2)
                 cl[t][sp["cat"]][1] += expct[t][sp["cat"]]
