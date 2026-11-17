@@ -106,6 +106,26 @@ class RangeParity(unittest.TestCase):
             for c in cats:
                 self.assertAlmostEqual(sum(wk[t][c][0] - wk[t][c][1] for wk in per_week), ref["byCat"][c]["diff"], places=6)
 
+    def test_category_luck_skips_a_category_some_team_has_no_value_for(self):
+        import copy
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        doc = copy.deepcopy(self.doc)
+        cat = doc["categories"][0]["cat"]
+        w = doc["weeks"][-1]
+        doc["views"]["w%d" % w]["teams"][next(iter(doc["teams"]))]["values"][cat] = None      # e.g. a team with no FT attempts yet
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "doc.json")
+            with open(path, "w") as f:
+                json.dump(doc, f)
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify(RotoPure.catLuckWeek(d,%d)))" % (path, w)
+            out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        week = json.loads(out.stdout)
+        self.assertTrue(all(t[cat] == [0, 0] for t in week.values()))                      # neither the real nor the expected win counts
+        other = doc["categories"][1]["cat"]
+        self.assertAlmostEqual(sum(t[other][0] - t[other][1] for t in week.values()), 0, places=6)
+
     def test_strength_of_schedule_is_the_opponents_real_record(self):
         with open(PAGE, encoding="utf-8") as f:
             src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
