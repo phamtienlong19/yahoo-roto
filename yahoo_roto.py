@@ -83,7 +83,7 @@ class Fetcher:
                 pass                                                    # unreadable copy: fetch again
         body = self._fetch(url)
         if path:
-            write_atomic(path, "<!--yr-fetched:%.0f-->\n%s" % (time.time(), body))
+            write_atomic(path, "<!--yr-fetched:%d-->\n%s" % (int(time.time()), body))
         return body
 
     def _fetch(self, url):
