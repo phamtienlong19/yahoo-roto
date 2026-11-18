@@ -415,6 +415,25 @@ class FetcherBehaviour(unittest.TestCase):
             fx.get("http://x/a")
         self.assertIn("not publicly viewable", str(cm.exception))
 
+    def test_a_copys_age_is_its_stamp_not_its_file_time_and_an_unstamped_copy_is_refetched(self):
+        # The live workflow restores the cache with `git archive`, which gives every file the last commit's time: a stale standings page (a renamed team) looked fresh forever.
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            fx, calls, _ = self.fetcher("one", "two", "three", cache=d)
+            self.assertEqual(fx.get("http://x/s", ttl=3600), "one")
+            p = fx._path("http://x/s")
+            with open(p, encoding="utf-8") as f:
+                body = f.read()
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(yr.STAMP.sub("<!--yr-fetched:1-->\n", body))               # old stamp ...
+            os.utime(p, None)                                                      # ... but a brand-new file time
+            self.assertEqual(fx.get("http://x/s", ttl=3600), "two")
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("<html>legacy copy, no stamp</html>")                      # written before stamps existed
+            self.assertEqual(fx.get("http://x/s", ttl=3600), "three")
+            self.assertEqual(len(calls), 3)
+
     def test_slow_changing_pages_are_copied_to_disk_for_a_limited_time(self):
         import os
         import tempfile
@@ -424,7 +443,10 @@ class FetcherBehaviour(unittest.TestCase):
             self.assertEqual(fx.get("http://x/s", ttl=3600), "one")               # served from disk
             self.assertEqual(len(calls), 1)
             p = fx._path("http://x/s")
-            os.utime(p, (1, 1))                                                    # the copy is now ancient
+            with open(p, encoding="utf-8") as f:
+                body = f.read()
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(yr.STAMP.sub("<!--yr-fetched:1-->\n", body))               # the copy is now ancient
             self.assertEqual(fx.get("http://x/s", ttl=3600), "two")
             self.assertEqual(fx.get("http://x/n"), "two")                          # no ttl: never copied, never read from disk
             self.assertEqual([f for f in os.listdir(d) if f.endswith(".tmp")], [])
