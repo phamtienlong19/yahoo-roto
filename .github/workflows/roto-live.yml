@@ -61,7 +61,7 @@ jobs:
         run: |
           set -u
           case "$ONE" in *[!0-9]*) echo "league must be digits only"; exit 1;; esac
-          G="python3 data_guard.py"; Q=""; [ -z "$QUAR" ] || Q="--quarantine $QUAR"   # validated by data_guard.py (a plain file under _cache/)
+          guard() { python3 data_guard.py "$@"; }   # QUAR (empty normally) is validated by data_guard.py: a plain file under _cache/
           STATE=cache/_cache/_state.json
           end=$(( $(date +%s) + 6900 )); mkdir -p cache
           # fallback only: the old clock rule, used if cadence.py cannot answer
@@ -70,9 +70,9 @@ jobs:
           # The data branch carries the finished weeks' cache and the other leagues' reports between runs. It is restored whole and
           # verified (data_guard.py); a pass that could not restore still builds reports but never publishes, and retries the restore.
           mkdir -p prev; restored=0; base=""; blocked=0; tfail=0; stop=0; said=""
-          note() { case "$said" in *"|$1|"*) return;; esac; said="$said|$1|"; $G alert "$2" || true; }
+          note() { case "$said" in *"|$1|"*) return;; esac; said="$said|$1|"; guard alert "$2" || true; }
           restore() {
-            rc=0; b=$($G restore --branch "$BRANCH" --cache cache --prev prev $Q) || rc=$?
+            rc=0; b=$(guard restore --branch "$BRANCH" --cache cache --prev prev --quarantine "$QUAR") || rc=$?
             case $rc in
               0) restored=1; base="${b#BASE=}"; tfail=0;;
               3) tfail=$((tfail+1)); [ "$tfail" -lt 3 ] || note restore-t "Could not read the $BRANCH branch for $tfail passes in a row; nothing is published until it can be restored.";;
@@ -104,7 +104,7 @@ jobs:
             mkdir -p "$out/_cache"; cp -R cache/_cache/. "$out/_cache/" 2>/dev/null || true
             keep=0
             if [ "$restored" = 1 ]; then
-              rc=0; nb=$($G publish --branch "$BRANCH" --out "$out" --prev prev --cache cache --base "$base" $Q) || rc=$?
+              rc=0; nb=$(guard publish --branch "$BRANCH" --out "$out" --prev prev --cache cache --base "$base" --quarantine "$QUAR") || rc=$?
               case $rc in
                 0) base="${nb#BASE=}"; tfail=0; keep=1;;
                 3) tfail=$((tfail+1)); keep=1; echo "publish failed (transient)"; [ "$tfail" -lt 3 ] || note push-t "Publishing the $BRANCH branch failed $tfail passes in a row.";;
