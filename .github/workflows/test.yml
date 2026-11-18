@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: "20"
       - name: Lint (unused imports, undefined names; this is the only thing installed, and only in CI)
-        run: python3 -m pip install --quiet pyflakes && python3 -m pyflakes yahoo_roto.py cadence.py canary.py pages.py tests
+        run: python3 -m pip install --quiet pyflakes && python3 -m pyflakes yahoo_roto.py cadence.py canary.py pages.py data_guard.py tests
       - name: Run tests (no network; includes the headless-Chrome page tests, which use the Chrome on the runner)
         run: python3 -m unittest discover -s tests -v
 

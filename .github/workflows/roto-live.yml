@@ -4,7 +4,7 @@ name: Roto live
 # Keeps a roto report for every league in leagues.json fresh for ~115 minutes per run. The pace follows the data (cadence.py): about every 3 minutes while Yahoo's totals are
 # changing (games being played), slower the longer nothing moves, hourly in the offseason; the clock is only a ceiling so a tip-off is noticed within 10 minutes. Then the
 # run's first step has already queued its successor (GitHub drops many cron triggers; the cron is only the backstop, every 15 minutes; the concurrency group below keeps at most one run waiting, so extra ticks are harmless). Read-only GETs of Yahoo's public
-# pages (leagues must be publicly viewable; no sign-in). Output goes to an orphan `data` branch (force-pushed, never grows); the Pages site (index.html)
+# pages (leagues must be publicly viewable; no sign-in). Output goes to an orphan `data` branch (replaced each pass, never grows), published only through data_guard.py: restore verified, protected history preserved, compare-and-swap push; the Pages site (index.html)
 # reads <repo>/data/<league>/report.json from raw.githubusercontent.com, so the page refreshes without a deploy.
 #   https://<owner>.github.io/<repo>/?league=<id>&repo=<owner>/<repo>
 
@@ -17,6 +17,14 @@ on:
         description: "Run once for this league id only (leave empty to loop over leagues.json)"
         required: false
         default: ""
+      quarantine:
+        description: "Repair only: a corrupt protected file under _cache/ (e.g. _cache/207464-games.json). Its bytes are kept under _quarantine/ on the data branch and the file starts afresh. Leave empty normally."
+        required: false
+        default: ""
+      data_branch:
+        description: "Staging only: publish to this branch instead of data (e.g. data-scratch). Leave as data normally."
+        required: false
+        default: "data"
 
 permissions:
   contents: write
@@ -48,22 +56,31 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
           ONE: ${{ inputs.league }}
+          QUAR: ${{ inputs.quarantine }}
+          BRANCH: ${{ inputs.data_branch || 'data' }}
         run: |
           set -u
           case "$ONE" in *[!0-9]*) echo "league must be digits only"; exit 1;; esac
+          G="python3 data_guard.py"; Q=""; [ -z "$QUAR" ] || Q="--quarantine $QUAR"   # validated by data_guard.py (a plain file under _cache/)
           STATE=cache/_cache/_state.json
           end=$(( $(date +%s) + 6900 )); mkdir -p cache
           # fallback only: the old clock rule, used if cadence.py cannot answer
           pick() { h=$((10#$(date -u +%H))); d=$(date -u +%u)
             if [ "$h" -ge 22 ] || [ "$h" -le 7 ] || { [ "$h" -ge 16 ] && [ "$d" -ge 6 ]; }; then echo 240; else echo 900; fi; }
-          # the data branch carries the finished weeks' cache between runs
-          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
-            if git fetch -q --depth=1 origin data; then git archive FETCH_HEAD _cache 2>/dev/null | tar -x -C cache || true; fi
-          fi
-          # ...and the other leagues' reports: a one-league run (or a league that failed) must not wipe them from the force-pushed branch
-          mkdir -p prev
-          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then git archive FETCH_HEAD 2>/dev/null | tar -x -C prev || true; fi
+          # The data branch carries the finished weeks' cache and the other leagues' reports between runs. It is restored whole and
+          # verified (data_guard.py); a pass that could not restore still builds reports but never publishes, and retries the restore.
+          mkdir -p prev; restored=0; base=""; blocked=0; tfail=0; stop=0; said=""
+          note() { case "$said" in *"|$1|"*) return;; esac; said="$said|$1|"; $G alert "$2" || true; }
+          restore() {
+            rc=0; b=$($G restore --branch "$BRANCH" --cache cache --prev prev $Q) || rc=$?
+            case $rc in
+              0) restored=1; base="${b#BASE=}"; tfail=0;;
+              3) tfail=$((tfail+1)); [ "$tfail" -lt 3 ] || note restore-t "Could not read the $BRANCH branch for $tfail passes in a row; nothing is published until it can be restored.";;
+              *) blocked=1; note restore-i "The $BRANCH branch failed its integrity check on restore, so nothing is published. See the run log; repair with the quarantine input.";;
+            esac
+          }
           while :; do
+            [ "$restored" = 1 ] || restore
             start=$(date +%s); out=$(mktemp -d); cp -R prev/. "$out/"
             leagues="$ONE"; [ -n "$leagues" ] || leagues=$(python3 -c "import json;print(' '.join(map(str,json.load(open('leagues.json'))['leagues'])))")
             for id in $leagues; do
@@ -85,12 +102,23 @@ jobs:
               fi
             done
             mkdir -p "$out/_cache"; cp -R cache/_cache/. "$out/_cache/" 2>/dev/null || true
-            ( cd "$out" && git init -q -b data && git config user.name "github-actions[bot]" && git config user.email "41898282+github-actions[bot]@users.noreply.github.com" \
-              && git add -A && git commit -q -m "roto $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              && git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data ) || echo "publish failed"
-            rm -rf prev; mkdir -p prev; ( cd "$out" && tar --exclude=.git -cf - . ) | tar -xf - -C prev
+            keep=0
+            if [ "$restored" = 1 ]; then
+              rc=0; nb=$($G publish --branch "$BRANCH" --out "$out" --prev prev --cache cache --base "$base" $Q) || rc=$?
+              case $rc in
+                0) base="${nb#BASE=}"; tfail=0; keep=1;;
+                3) tfail=$((tfail+1)); keep=1; echo "publish failed (transient)"; [ "$tfail" -lt 3 ] || note push-t "Publishing the $BRANCH branch failed $tfail passes in a row.";;
+                4) blocked=1; note policy "A publish would have lost or altered protected history on $BRANCH, so nothing was pushed. See the run log.";;
+                *) blocked=1; stop=1; note lease "The $BRANCH branch moved while this run was publishing, so the run stopped without overwriting it. The next run restores fresh state.";;
+              esac
+            else
+              echo "not publishing: the previous $BRANCH branch is not restored"
+            fi
+            [ "$keep" = 1 ] && { rm -rf prev; mkdir -p prev; ( cd "$out" && tar --exclude=.git -cf - . ) | tar -xf - -C prev; }
+            [ "$stop" = 0 ] || break
             [ -n "$ONE" ] && break
             rest=$(( $(python3 cadence.py delay "$STATE" 2>/dev/null || pick) - ($(date +%s) - start) )); [ "$rest" -gt 0 ] || continue
             [ $(( $(date +%s) + rest )) -lt "$end" ] || break
             sleep "$rest"
           done
+          [ "$blocked" = 0 ] || { echo "::error::publishing was blocked during this run (see the 'Roto publish blocked' issue)"; exit 1; }
