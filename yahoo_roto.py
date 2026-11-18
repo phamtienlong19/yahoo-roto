@@ -41,6 +41,7 @@ UA = "yahoo-roto/1.0 (read-only; public pages)"
 RETRIES = 2                                                              # extra attempts for a request that failed in a way that may pass (timeout, 5xx, 429)
 BACKOFF = (2, 6)                                                         # seconds to wait before the 2nd and 3rd attempt
 TTL = {"settings": 12 * 3600, "standings": 6 * 3600, "weeks": 6 * 3600}   # pages that hardly ever change are not fetched on every pass
+STAMP = re.compile(r"<!--yr-fetched:(\d+(?:\.\d+)?)-->\n")
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -71,15 +72,18 @@ class Fetcher:
 
     def get(self, url, ttl=None):
         path = self._path(url) if self.cache and ttl else None
-        if path and os.path.exists(path) and time.time() - os.path.getmtime(path) < ttl:
+        if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
-                    return f.read()
+                    raw = f.read()
+                m = STAMP.match(raw)
+                if m and 0 <= time.time() - float(m.group(1)) < ttl:        # age comes from the stamp: the live workflow restores the cache from git, which gives every file the
+                    return raw[m.end():]                                   # time of the last commit, so a file's own mtime says nothing about when Yahoo was asked. No stamp = too old.
             except (OSError, ValueError):
                 pass                                                    # unreadable copy: fetch again
         body = self._fetch(url)
         if path:
-            write_atomic(path, body)
+            write_atomic(path, "<!--yr-fetched:%d-->\n%s" % (int(time.time()), body))
         return body
 
     def _fetch(self, url):
