@@ -1,0 +1,50 @@
+{
+ "note": "ids = sha256(prev_id + newline + canonical(row)).hexdigest()[:20]; canonical = json.dumps(sort_keys, separators (',',':'), ensure_ascii=False). Computed independently of data_guard.py.",
+ "cases": {
+  "empty": [],
+  "ascii": [
+   {
+    "row": {
+     "w": 1,
+     "t": 3,
+     "p": 2,
+     "n": 24,
+     "r": 22
+    },
+    "id": "59e49319ff852e4f15a3"
+   },
+   {
+    "row": {
+     "w": 1,
+     "t": 4,
+     "p": 2,
+     "n": 25,
+     "r": 23
+    },
+    "id": "eeb530a3181f1981672a"
+   }
+  ],
+  "key order and non-ascii": [
+   {
+    "row": {
+     "z": 1,
+     "a": [
+      1,
+      2,
+      {
+       "b": null
+      }
+     ],
+     "name": "Thịnh ⛹️"
+    },
+    "id": "73f0ad2acd7169db19b2"
+   },
+   {
+    "row": {
+     "x": 0.5
+    },
+    "id": "7331f868468c1cedbc02"
+   }
+  ]
+ }
+}
