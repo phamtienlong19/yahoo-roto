@@ -56,7 +56,8 @@ def build_pages(n=18, weeks=4, seed=7, regular=None, divisions=False, spots=6):
         rows = "".join(('<tr><td><h4>%s</h4></td></tr>' % d if i in (0, n // 2) else "") + '<tr><td><a href="/nba/9/%d">%s</a></td></tr>' % (i + 1, names[i]) for i, d in ((i, "East" if i < n // 2 else "West") for i in range(n)))
     else:
         rows = "".join('<tr><td><a href="/nba/9/%d">%s</a></td></tr>' % (i + 1, names[i]) for i in range(n))
-    pages = {"settings": settings, "lhst=stand": "<table><tr><th>Team</th></tr>" + rows + "</table>"}
+    pages = {"settings": settings}
+    record = [[0, 0, 0] for _ in range(n)]                                  # category W-L-T over the finished weeks: what Yahoo's own standings table shows
     for w in range(1, last + 1):
         order = list(range(n))
         random.Random(w).shuffle(order)
@@ -66,9 +67,21 @@ def build_pages(n=18, weeks=4, seed=7, regular=None, divisions=False, spots=6):
             for a, b in pairs:
                 wins = sum(1 for i in (1, 3, 4, 5, 6, 7, 8, 9) if float(data[a]["v"][i]) > float(data[b]["v"][i])) + (1 if float(data[a]["v"][10]) < float(data[b]["v"][10]) else 0)
                 data[a]["sc"], data[b]["sc"] = str(wins), str(9 - wins)
+                if w < weeks:
+                    won = [(float(data[a]["v"][i]) > float(data[b]["v"][i])) - (float(data[a]["v"][i]) < float(data[b]["v"][i])) for i in (1, 3, 4, 5, 6, 7, 8, 9)]
+                    won.append((float(data[a]["v"][10]) < float(data[b]["v"][10])) - (float(data[a]["v"][10]) > float(data[b]["v"][10])))
+                    for t, sign in ((a, 1), (b, -1)):
+                        for r in won:
+                            record[t][0 if r * sign > 0 else 1 if r * sign < 0 else 2] += 1
         for a, b in pairs:
             for t in (a, b):
                 pages["week=%d&mid1=%d" % (w, t + 1)] = page(w, [a, b], data)
+    pct = [(r[0] + r[2] / 2) / max(1, sum(r)) for r in record]
+    for i in range(n):                                                      # the records go into the standings rows
+        rank = 1 + sum(1 for p in pct if p > pct[i])
+        rows = rows.replace('<tr><td><a href="/nba/9/%d">%s</a></td></tr>' % (i + 1, names[i]),
+                            '<tr><td>%d</td><td><a href="/nba/9/%d">%s</a></td><td>%d-%d-%d</td></tr>' % ((rank, i + 1, names[i]) + tuple(record[i])))
+    pages["lhst=stand"] = "<table><tr><th>Rank</th><th>Team</th><th>W-L-T</th></tr>" + rows + "</table>"
     return pages
 
 
