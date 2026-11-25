@@ -165,6 +165,10 @@ class AllPlayAndReport(unittest.TestCase):
 
     def test_the_cups_block_in_leagues_json_is_read_and_the_super_cup_lists_16_teams(self):
         cup = yr.configured_cup("212003")
+        by_league = [t["league"] for t in cup["teams"].values()]
+        self.assertEqual((by_league.count("PL"), by_league.count("CL")), (3, 1))          # the commissioner's correction: PL 4 qualifies as Champions League 2
+        self.assertEqual(cup["teams"]["12"], {"league": "CL", "rank": 2})
+        self.assertTrue(all(t["league"] in cup["leagues"] for t in cup["teams"].values()))
         self.assertEqual(len(cup["teams"]), 16)
         self.assertEqual(sorted(cup["teams"], key=int), [str(i) for i in range(1, 17)])
         self.assertTrue(all(t["league"] in cup["leagues"] for t in cup["teams"].values()))

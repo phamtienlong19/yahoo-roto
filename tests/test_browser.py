@@ -24,7 +24,7 @@ var R={},errors=[];
 var COLOURS=[['board=real&basis=matchups',['Luck','Places vs expected']],['board=luck&lens=summary&basis=cats',['Category luck','Places vs expected']],['board=luck&lens=week&basis=matchups',['Wk 2','Luck']],['board=standings&lens=live',['Record']],['board=luck&lens=cat',['PTS','TO','Luck']],
  ['board=outlook&lens=sos',['SOS','Rank']],['board=outlook&lens=odds',['Playoffs']],['board=weekly',['Points','Rank']],['board=allplay',['Win%','Rank']],['board=power',['Season Roto','Weekly Roto','Season All-Play','Real Record','Power']],['board=roto',['Total']],
  ['board=matchlog',['Category luck']],['board=performance&lens=form',['Win%']],];
-var PLAIN=[['board=real&basis=matchups',['Record','Wins','Expected wins','Rank','Expected rank']],['board=standings&lens=live',['Wk 4 vs','Rank','Div']],['board=luck&lens=cat',['Won','Expected','Rank']],['board=outlook&lens=sos',["Opponents' record"]],['board=outlook&lens=odds',['Top seed','Projected rank','Since Wk 2']],
+var PLAIN=[['board=real&basis=matchups',['Record','Wins','Expected wins','Rank','Expected rank']],['board=standings&lens=live',['GB','Wk 4 vs','Rank','Div']],['board=luck&lens=cat',['Won','Expected','Rank']],['board=outlook&lens=sos',["Opponents' record"]],['board=outlook&lens=odds',['Top seed','Projected rank','Since Wk 2']],
  ['board=weekly',['Per week']],['board=allplay',['W-L-T']],['board=matchlog',['All-play Win%',"Opponent's Win%",'Matchup luck']],['board=roto',['Rank']],['board=performance&lens=form',['Last 3','Season Win%','Stats said']],['board=performance&lens=split',['Vs strong','Vs weak']]];
 var COPYQ=['season=1&board=roto','season=1&board=totals','season=1&board=matrix','season=1&board=weekly','season=1&board=allplay','season=1&board=real','season=1&board=luck&lens=summary&basis=cats','season=1&board=luck&lens=week','season=1&board=luck&lens=week&basis=cats','season=1&board=luck&lens=cat',
  'season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=sos&per=rest','season=1&board=outlook&lens=sos&per=rest&thru=final','season=1&board=standings&lens=live','season=1&board=standings&lens=live&thru=final','season=1&board=outlook&lens=odds','season=1&board=kings','season=1&board=performance&lens=form','season=1&board=performance&lens=split','season=1&board=performance&lens=trends','season=1&board=power','week=3&view=roto','week=3&view=stats','week=3&view=allplay','week=3&view=matchups'];
@@ -125,6 +125,12 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p=await load('week=4&view=roto','cup/');R.cupWrap=p.d.querySelector('.wrap').classList.contains('cup');R.cupSheet=p.d.querySelectorAll('.sheet.cup').length;R.cupHead=p.d.querySelectorAll('.cuphead h1').length;R.cupKicker=txt(p.d.querySelector('.cuphead .kicker'));
  R.cupChips=[].slice.call(p.d.querySelectorAll('.st th.team .lgchip')).map(function(e){return e.textContent});R.cupChipTip=(p.d.querySelector('.st th.team .lgchip.sub')||{}).title;R.cupBand=p.d.querySelectorAll('.st th.team.q,.st tr.cut').length;R.cupKey=p.d.querySelectorAll('.cupkey').length;
  R.rb=p.d.querySelectorAll('.st td .rb').length;R.rbGold=[].slice.call(p.d.querySelectorAll('.st td .rb.gold')).map(function(e){return e.textContent});R.lead=p.d.querySelectorAll('.st th.team.lead').length;R.tro=p.d.querySelectorAll('.holders .tro svg').length;
+ R.fonts=[];R.fontsSeen=0;
+ for(var q of ['week=4&view=roto','week=4&view=allplay','week=4&view=matchups','season=1&board=standings&lens=live','season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=odds','season=1&board=performance&lens=trends','season=1&board=kings','static=1&season=1&board=weekly']){
+  p=await load(q,'cup/');p.w.scrollTo(0,700);p.w.dispatchEvent(new p.w.Event('scroll'));if(q.indexOf('static')<0)p.d.querySelector('#status .linkbtn').click();
+  [].forEach.call(p.d.querySelectorAll('.wrap,.wrap *,.wrap~*,.wrap~* *'),function(e){if(e.closest('script,style,.crown'))return;R.fontsSeen++;var f=p.w.getComputedStyle(e).fontFamily;if(!/^"?Manrope/.test(f))R.fonts.push(q+' '+e.tagName+'.'+e.getAttribute('class')+' '+f);});}
+ p=await load('season=1&board=standings&lens=live','cup/');R.cupTier={badges:p.d.querySelectorAll('tr.tier .rb').length,heads:[].slice.call(p.d.querySelectorAll('tr.tier th > span')).map(txt),ranks:p.d.querySelectorAll('.tscroll .st tbody tr:not(.tier) td.rank .rb').length,gold:[].slice.call(p.d.querySelectorAll('.rb.gold')).map(txt)};
+ p=await load('season=1&board=standings&lens=live');R.plainFont=p.w.getComputedStyle(p.d.querySelector('.sheet h1')).fontFamily;
  p=await load('season=1&board=outlook&lens=race','cup/');R.raceLenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg button')).map(txt);R.raceH1=txt(p.d.querySelector('h1'));R.raceRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.raceIn=p.d.querySelectorAll('.tscroll .st tbody tr.in').length;R.raceEdge=p.d.querySelectorAll('.tscroll .st tbody th.team.q').length;
  R.raceStatus=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody td.status')).map(txt);R.raceLeaders=R.raceStatus.filter(function(x){return /leader/.test(x)}).length;
  p=await load('season=1&board=outlook');R.plainLenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg button')).map(txt);
@@ -222,6 +228,18 @@ class Browser(unittest.TestCase):
         self.assertFalse(R["plainWrap"])
         self.assertEqual(R["plainChips"], 0)
 
+    def test_cup_rank_badges_stay_off_the_tier_headings(self):
+        t = self.R["cupTier"]
+        self.assertEqual(t["badges"], 0)
+        self.assertTrue(t["heads"] and "\u00b7" in t["heads"][0], t["heads"])
+        self.assertEqual(t["ranks"], 18)                                                              # every team's rank is still a badge
+        self.assertTrue(t["gold"] and all(x.endswith("1") for x in t["gold"]), t["gold"])
+
+    def test_every_element_of_a_cup_league_is_set_in_manrope(self):
+        self.assertGreater(self.R["fontsSeen"], 1000)
+        self.assertEqual(self.R["fonts"], [])
+        self.assertNotIn("Manrope", self.R["plainFont"])                                              # an ordinary league keeps its own font
+
     def test_the_page_runs_without_errors(self):
         self.assertNotIn("fatal", self.R, self.R)
         self.assertEqual(self.R["errors"], [])
@@ -302,14 +320,18 @@ class Browser(unittest.TestCase):
         lv, fin = self.R["lv"], self.R["fin"]
         self.assertIn("Live Standings", lv["h1"])
         self.assertEqual(lv["chips"], ["Thru Wk 4 \u00b7 live", "Thru Wk 3 \u00b7 final"])
-        self.assertEqual(lv["heads"], ["Rank", "Team", "Record", "Wk 4 vs", "Score", "Wk 5 vs", "Div"])             # the rank leads; one record column, who they face and who is next
+        self.assertEqual(lv["heads"], ["Rank", "Team", "Record", "GB", "Wk 4 vs", "Score", "Wk 5 vs", "Div"])       # the rank leads; one record column, games behind, who they face and who is next
+        for rows in (lv["rows"], fin["rows"]):
+            lead = [int(w) - int(losses) for w, losses, _ in (r[2].split("-") for r in rows)]
+            want = ["\u2013" if x == max(lead) else "%g" % ((max(lead) - x) / 2) for x in lead]
+            self.assertEqual([r[3] for r in rows], want)                                              # games behind first place
         self.assertEqual((len(lv["rows"]), len(fin["rows"])), (18, 18))
         self.assertTrue(all(sum(int(x) for x in r[2].split("-")) == 4 * 9 for r in lv["rows"]))
         self.assertTrue(all(sum(int(x) for x in r[2].split("-")) == 3 * 9 for r in fin["rows"]))
         self.assertTrue(all(re.match(r"^(T-)?\d+$", r[0]) for r in lv["rows"] + fin["rows"]))
         self.assertIn("finished weeks only", lv["said"])
         self.assertIn("Standings after Wk 3", fin["h1"])
-        self.assertEqual(fin["heads"], ["Rank", "Team", "Record", "Wk 3 vs", "Score", "Wk 4 vs", "Div"])
+        self.assertEqual(fin["heads"], ["Rank", "Team", "Record", "GB", "Wk 3 vs", "Score", "Wk 4 vs", "Div"])
         self.assertIn("Ranks are Yahoo's", fin["said"])
         self.assertIn("Matches Yahoo's standings through Wk 3 (18 of 18 teams)", fin["said"])
         self.assertIn("thru=final", fin["url"])
@@ -332,9 +354,9 @@ class Browser(unittest.TestCase):
             for row in view["rows"]:
                 t = next(k for k, v in names.items() if row[1].startswith(v) and by_name[v] == k)
                 now = d["composites"]["weekly"][t][str(week)]["opp"]
-                self.assertTrue(row[3].startswith(names[str(now)]), (week, row))
+                self.assertTrue(row[4].startswith(names[str(now)]), (week, row))
                 nxt = str(d["composites"]["weekly"][t]["4"]["opp"]) if week == 3 else opponent(d["odds"]["schedule"]["5"], t)
-                self.assertTrue(row[5].startswith(names[nxt]), (week, row))
+                self.assertTrue(row[6].startswith(names[nxt]), (week, row))
 
     def test_the_standings_are_split_into_tiers_and_keep_that_order(self):
         self.assertEqual(self.R["lv"]["tiers"], ["1st-round bye \u00b7 1\u20132", "Playoffs \u00b7 3\u20136", "Outside the playoffs \u00b7 7\u201318"])

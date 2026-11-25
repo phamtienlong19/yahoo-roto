@@ -31,6 +31,10 @@
           "label": "Super Cup holders",
           "color": "#9A6700"
         },
+        "CL": {
+          "label": "Champions League",
+          "color": "#000000"
+        },
         "PL": {
           "label": "Premier League",
           "color": "#7030A0"
@@ -62,7 +66,7 @@
           "rank": 1,
           "also": [
             "Bundesliga 3",
-            "C1"
+            "CL"
           ]
         },
         "15": {
@@ -78,11 +82,8 @@
           "rank": 3
         },
         "12": {
-          "league": "PL",
-          "rank": 4,
-          "also": [
-            "C1 2"
-          ]
+          "league": "CL",
+          "rank": 2
         },
         "11": {
           "league": "SA",
@@ -113,7 +114,7 @@
           "league": "RSL",
           "rank": 3,
           "also": [
-            "C1 3"
+            "CL 3"
           ]
         },
         "13": {
