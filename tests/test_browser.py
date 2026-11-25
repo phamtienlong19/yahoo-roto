@@ -302,13 +302,14 @@ class Browser(unittest.TestCase):
         lv, fin = self.R["lv"], self.R["fin"]
         self.assertIn("Live Standings", lv["h1"])
         self.assertEqual(lv["chips"], ["Thru Wk 4 \u00b7 live", "Thru Wk 3 \u00b7 final"])
-        self.assertEqual(lv["heads"], ["Team", "Record", "Wk 4 vs", "Score", "Wk 5 vs", "Rank", "Div"])             # one record column, who they face and who is next
+        self.assertEqual(lv["heads"], ["Rank", "Team", "Record", "Wk 4 vs", "Score", "Wk 5 vs", "Div"])             # the rank leads; one record column, who they face and who is next
         self.assertEqual((len(lv["rows"]), len(fin["rows"])), (18, 18))
-        self.assertTrue(all(sum(int(x) for x in r[1].split("-")) == 4 * 9 for r in lv["rows"]))
-        self.assertTrue(all(sum(int(x) for x in r[1].split("-")) == 3 * 9 for r in fin["rows"]))
+        self.assertTrue(all(sum(int(x) for x in r[2].split("-")) == 4 * 9 for r in lv["rows"]))
+        self.assertTrue(all(sum(int(x) for x in r[2].split("-")) == 3 * 9 for r in fin["rows"]))
+        self.assertTrue(all(re.match(r"^(T-)?\d+$", r[0]) for r in lv["rows"] + fin["rows"]))
         self.assertIn("finished weeks only", lv["said"])
         self.assertIn("Standings after Wk 3", fin["h1"])
-        self.assertEqual(fin["heads"], ["Team", "Record", "Wk 3 vs", "Score", "Wk 4 vs", "Rank", "Div"])
+        self.assertEqual(fin["heads"], ["Rank", "Team", "Record", "Wk 3 vs", "Score", "Wk 4 vs", "Div"])
         self.assertIn("Ranks are Yahoo's", fin["said"])
         self.assertIn("Matches Yahoo's standings through Wk 3 (18 of 18 teams)", fin["said"])
         self.assertIn("thru=final", fin["url"])
@@ -329,11 +330,11 @@ class Browser(unittest.TestCase):
             return next(str(b if a == int(t) else a) for a, b in pairs if int(t) in (a, b))
         for view, week in ((self.R["lv"], 4), (self.R["fin"], 3)):
             for row in view["rows"]:
-                t = next(k for k, v in names.items() if row[0].startswith(v) and by_name[v] == k)
+                t = next(k for k, v in names.items() if row[1].startswith(v) and by_name[v] == k)
                 now = d["composites"]["weekly"][t][str(week)]["opp"]
-                self.assertTrue(row[2].startswith(names[str(now)]), (week, row))
+                self.assertTrue(row[3].startswith(names[str(now)]), (week, row))
                 nxt = str(d["composites"]["weekly"][t]["4"]["opp"]) if week == 3 else opponent(d["odds"]["schedule"]["5"], t)
-                self.assertTrue(row[4].startswith(names[nxt]), (week, row))
+                self.assertTrue(row[5].startswith(names[nxt]), (week, row))
 
     def test_the_standings_are_split_into_tiers_and_keep_that_order(self):
         self.assertEqual(self.R["lv"]["tiers"], ["1st-round bye \u00b7 1\u20132", "Playoffs \u00b7 3\u20136", "Outside the playoffs \u00b7 7\u201318"])
