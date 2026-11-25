@@ -7,7 +7,7 @@ Each week has its own view (Wk 1, Wk 2, ...), and the **Season** tab has five ta
 
 | Tab | The question it answers |
 | --- | --- |
-| **Standings** | Who is ahead? Roto points by category, raw totals, weekly roto points, power rank, live standings. |
+| **Standings** | Who is ahead? Live standings with playoff tiers and next opponents, roto points, raw totals, power rank. |
 | **All-Play** | How good are your stats, whoever you faced? |
 | **Luck** | Did you win more or less than your stats deserved? Summary, by week, by category, every matchup. |
 | **Outlook** | Who will make the playoffs, and how hard was each schedule? |
@@ -49,7 +49,7 @@ This repo is the setup: GitHub Pages serves the page, and the `Roto live` workfl
 4. Run the "Roto live" workflow once (Actions tab). It keeps itself running.
 
 To show a defending champion's crown, add `"champions": {"<league id>": "<team name or team id>"}` to `leagues.json`.
-Cup leagues (teams qualified from elsewhere) take a `cups` entry: see ARCHITECTURE.md.
+Cup leagues (teams qualified from elsewhere) take a `cups` entry, and house rules below the playoff line a `tiers` entry: see ARCHITECTURE.md.
 
 ## Keeping it fresh
 - The feed refreshes about every 3 minutes while games are being played, and slows down when nothing changes.

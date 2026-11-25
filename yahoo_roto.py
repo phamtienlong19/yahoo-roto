@@ -1266,6 +1266,33 @@ def configured_cup(league, root=None):
         return None
 
 
+def configured_tiers(league, root=None):
+    """The house rules below the playoff line set for this league in leagues.json ("tiers": {"<league id>": {"consolationTo": place, "noKeepers": count}}), or None."""
+    try:
+        with open(os.path.join(root or os.path.dirname(os.path.abspath(__file__)), "leagues.json"), encoding="utf-8") as f:
+            return (json.load(f).get("tiers") or {}).get(str(league))
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def tiers_block(settings, spec=None):
+    """Where the standings split -> {"spots" (playoff places), "byes" (top seeds that sit out round one), "divisionWinners", "divisions": {team: name}} plus, from `spec`,
+    "consolationTo" (last place of the consolation bracket) and "noKeepers" (how many bottom teams lose their keepers); None when the settings page states no playoffs.
+    A knockout of 6 teams needs 8 slots, so the top 2 sit out: byes = the next power of two minus the playoff teams."""
+    spots = settings.get("playoff_teams")
+    if not isinstance(spots, int) or spots < 2:
+        return None
+    divisions = settings.get("divisions") or {}
+    out = {"spots": spots, "byes": (1 << (spots - 1).bit_length()) - spots, "divisionWinners": bool(settings.get("div_winners") and divisions),
+           "divisions": {str(t): d for t, d in sorted(divisions.items())}}
+    spec = spec if isinstance(spec, dict) else {}
+    if isinstance(spec.get("consolationTo"), int) and spec["consolationTo"] > spots:
+        out["consolationTo"] = spec["consolationTo"]
+    if isinstance(spec.get("noKeepers"), int) and spec["noKeepers"] > 0:
+        out["noKeepers"] = spec["noKeepers"]
+    return out
+
+
 def resolve_cup(spec, names, odds_spots=None):
     """A league that is a cup (teams qualified from other leagues) -> the part of the report the page styles it from, or None.
     spec: {"spots": playoff places, "leagues": {key: {"label", "color"}}, "teams": {"<team id>": {"league": key, "rank": n, "also": [text], "substitute": text}}}.
@@ -1404,6 +1431,9 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
             "compositesFinal": composites_final, "odds": odds}
     if st.get("standings"):
         doc["yahooStandings"] = {str(t): r for t, r in sorted(st["standings"].items())}     # Yahoo's own table, to check the page's standings against
+    tiers = tiers_block(st, configured_tiers(league))
+    if tiers:
+        doc["tiers"] = tiers                                             # where the live standings draw their lines
     if cup:
         doc["cup"] = cup                                                 # only for a cup league: every other report is byte for byte what it was
     return doc

@@ -29,6 +29,8 @@ Yahoo's own calendar decides what is live: the default matchup page shows the cu
 ## Standings, and what is still to come
 Live standings and rest-of-season strength of schedule count the records through one week X: the week being played (default) or, with `thru=final`, the last finished one. What is "still to come" always starts at X+1 (`weeksAfter`). On the final view `RotoPure.yahooCheck` compares the records with `report.yahooStandings` (Yahoo's own standings table, which counts finished weeks only, read from the page already fetched and cached 6 h).
 
+The live standings split into tiers from `report.tiers` (`tiers_block`): playoff places and first-round byes (next power of two minus the places) from the settings page, plus per-league house rules from `leagues.json` `"tiers": {"<id>": {"consolationTo": 12, "noKeepers": 2}}`. `RotoPure.tiers` seeds by Yahoo's rule (division leaders get in, seeded by record); on the final view Yahoo's own rank settles level records, live ties across a line are named.
+
 ## Page addresses
 `?week=3&view=allplay` (views `roto`, `stats`, `allplay`, `matchups`) opens a week; `?season=1&board=<tab>&lens=<view>` opens a season table (tabs `standings`, `allplay`, `luck`, `outlook`, `performance`), with `&basis=cats` (the default) or `&basis=matchups`, `&thru=final`, `&cat=PTS`, `&range=3-7`, `&win=5`, `&sort=2.desc` and `&me=<teamId>` where they apply. Older links (`board=roto`, `board=real`, `board=catluck`, `lens=expected`, ...) are mapped to their new tab and view by the alias table in `index.html`. Static mode (`&static=1`) is the layout the PNGs are drawn from, 1680 px wide (2600 px for the matrix); a table wider than the picture shrinks until it fits.
 

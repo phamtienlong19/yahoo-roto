@@ -326,6 +326,29 @@ class RangeParity(unittest.TestCase):
             self.assertEqual([{k: x[k] for k in ("week", "opp", "rank")} for x in got[2][str(t)]], want, t)
         self.assertEqual(sorted(x["rank"] for t in teams for x in got[0][str(t)]), sorted(rank_of([1, 2, 3], "matchups")[x["opp"]] for t in teams for x in got[0][str(t)]))
 
+    def test_the_standings_tiers_follow_the_playoff_rule_and_flag_ties_on_a_line(self):
+        def team(i, pct, tb=0, div=None):
+            return {"id": str(i), "points": pct, "tb": tb, "div": div}
+        ten = [team(i, (100 - i) / 100.0, 0, "E" if i <= 8 else "W") for i in range(1, 11)]           # West's best (9) is only 9th on record
+        cfg = {"spots": 4, "byes": 2, "divisionWinners": True, "consolationTo": 7, "noKeepers": 2}
+        tied = [team(1, .9), team(2, .8), team(3, .7), team(4, .6, 5), team(5, .6, 1), team(6, .5)]
+        plain = {"spots": 4, "byes": 0}
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        calls = [(ten, cfg, False), (tied, plain, False), (tied, plain, True)]
+        code = src + "\nconsole.log(JSON.stringify(%s.map(function(c){return RotoPure.tiers(c[0],c[1],c[2]);})))" % json.dumps(calls)
+        out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        a, b, c = json.loads(out.stdout)
+        self.assertEqual(a["order"], ["1", "2", "3", "9", "4", "5", "6", "7", "8", "10"])             # the division leader is lifted in, seeded by record; the 4th best drops out
+        self.assertEqual([a["tier"][t] for t in a["order"]], ["bye", "bye", "playoff", "playoff", "consolation", "consolation", "consolation", "out", "nokeep", "nokeep"])
+        self.assertEqual(a["leader"], {"1": "E", "9": "W"})
+        self.assertEqual(a["level"], [])
+        self.assertEqual(b["order"][:5], ["1", "2", "3", "4", "5"])
+        self.assertEqual(b["level"], [["4", "5"]])                                                    # level on the playoff line
+        self.assertEqual(c["level"], [])                                                              # Yahoo's own order settles it
+        self.assertEqual([b["tier"][t] for t in ("1", "5")], ["playoff", "out"])
+
     def test_standings_are_checked_against_yahoos_own_table(self):
         comp = self.doc["compositesFinal"]
         good = self.doc["yahooStandings"]

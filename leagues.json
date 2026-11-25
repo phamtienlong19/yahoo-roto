@@ -17,6 +17,12 @@
     "207464": "sup fam",
     "212003": "master chef"
   },
+  "tiers": {
+    "207464": {
+      "consolationTo": 12,
+      "noKeepers": 2
+    }
+  },
   "cups": {
     "212003": {
       "spots": 8,
