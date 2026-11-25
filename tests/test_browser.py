@@ -135,8 +135,11 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  for(var q of ['week=4&view=roto','week=4&view=allplay','week=4&view=matchups','season=1&board=standings&lens=live','season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=odds','season=1&board=performance&lens=trends','season=1&board=kings','static=1&season=1&board=weekly']){
   p=await load(q,'cup/');p.w.scrollTo(0,700);p.w.dispatchEvent(new p.w.Event('scroll'));if(q.indexOf('static')<0)p.d.querySelector('#status .linkbtn').click();
   [].forEach.call(p.d.querySelectorAll('.wrap,.wrap *,.wrap~*,.wrap~* *'),function(e){if(e.closest('script,style,.crown'))return;R.fontsSeen++;var f=p.w.getComputedStyle(e).fontFamily;if(!/^"?Manrope/.test(f))R.fonts.push(q+' '+e.tagName+'.'+e.getAttribute('class')+' '+f);});}
- p=await load('season=1&board=standings&lens=live','cup/');R.cupStand={badges:p.d.querySelectorAll('td.plc .rkn.rb').length,moves:p.d.querySelectorAll('td.plc .mv').length,inside:p.d.querySelectorAll('td.plc .rb .mv').length,
-  chips:[].slice.call(p.d.querySelectorAll('.st th.team .lgchip')).map(function(e){return [e.textContent,e.classList.contains('champ'),e.title,e.closest('th').querySelector('.crown')!==null]}),key:txt(p.d.querySelector('.cupkey'))};
+ p=await load('season=1&board=standings&lens=live','cup/');p.d.documentElement.removeAttribute('data-theme');     /* the light theme, whatever the machine running the test prefers */
+ var fillOf=function(){var o={};[].slice.call(p.d.querySelectorAll('.st th.team .lgchip.champ,.st th.team .lgchip.holder')).forEach(function(e){o[e.textContent]=p.w.getComputedStyle(e).backgroundImage});return o};
+ p.d.documentElement.setAttribute('data-theme','dark');R.cupDark=fillOf();p.d.documentElement.removeAttribute('data-theme');
+ R.cupStand={badges:p.d.querySelectorAll('td.plc .rkn.rb').length,moves:p.d.querySelectorAll('td.plc .mv').length,inside:p.d.querySelectorAll('td.plc .rb .mv').length,
+  chips:[].slice.call(p.d.querySelectorAll('.st th.team .lgchip')).map(function(e){var st=p.w.getComputedStyle(e),dot=p.w.getComputedStyle(e,'::before');return {text:e.textContent,champ:e.classList.contains('champ'),holder:e.classList.contains('holder'),tip:e.title,crowned:e.closest('th').querySelector('.crown')!==null,fill:st.backgroundImage,dot:dot.content==='none'?null:dot.backgroundColor}}),key:txt(p.d.querySelector('.cupkey'))};
  R.cupTier={badges:p.d.querySelectorAll('tr.tier .rb').length,heads:[].slice.call(p.d.querySelectorAll('tr.tier th > span')).map(txt),ranks:p.d.querySelectorAll('.tscroll .st tbody tr:not(.tier) td.rank .rb').length,gold:[].slice.call(p.d.querySelectorAll('.rb.gold')).map(txt)};
  p=await load('season=1&board=standings&lens=live');R.plainFont=p.w.getComputedStyle(p.d.querySelector('.sheet h1')).fontFamily;
  p=await load('season=1&board=outlook&lens=race','cup/');R.raceLenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg button')).map(txt);R.raceH1=txt(p.d.querySelector('h1'));R.raceRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.raceIn=p.d.querySelectorAll('.tscroll .st tbody tr.in').length;R.raceEdge=p.d.querySelectorAll('.tscroll .st tbody th.team.q').length;
@@ -189,8 +192,9 @@ class Browser(unittest.TestCase):
         cls.spots = main["odds"]["spots"]
         cup = json.loads(json.dumps(main))                                                                 # a cup league: three teams qualified from Serie A (one by a substitute), spots = 8
         ids = sorted(cup["teams"], key=int)
-        cup["cup"] = {"spots": 8, "leagues": {"SA": {"label": "Serie A", "color": "#002060"}},
-                      "teams": {ids[0]: {"league": "SA", "rank": 1}, ids[1]: {"league": "SA", "rank": 2, "also": ["C1 3"]}, ids[2]: {"league": "SA", "rank": 3, "substitute": "Somebody"}}}
+        cup["cup"] = {"spots": 8, "leagues": {"SA": {"label": "Serie A", "color": "#002060"}, "SC": {"label": "Super Cup holders", "color": "#9A6700"}},
+                      "teams": {str(cup["champion"]): {"league": "SC", "rank": 1},
+                                ids[0]: {"league": "SA", "rank": 1}, ids[1]: {"league": "SA", "rank": 2, "also": ["C1 3"]}, ids[2]: {"league": "SA", "rank": 3, "substitute": "Somebody"}}}
         yr.write_html(cup, os.path.join(cls.site, "cup"))
         with open(os.path.join(cls.site, "t.html"), "w", encoding="utf-8") as f:
             f.write(HARNESS)
@@ -223,7 +227,7 @@ class Browser(unittest.TestCase):
         self.assertTrue(R["cupWrap"])
         self.assertEqual((R["cupSheet"], R["cupHead"], R["cupKey"]), (1, 1, 1))
         self.assertIn("TOP 8 ADVANCE", R["cupKicker"].upper())
-        self.assertEqual(sorted(R["cupChips"]), ["SA 2", "SA 3*", "\u2605 SA 1"])                    # * = a substitute, a star = that league's champion
+        self.assertEqual(sorted(R["cupChips"]), ["SA 2", "SA 3*", "SC 1", "\u2605 SA 1"])            # * = a substitute, a star = that league's champion
         self.assertIn("playing in place of Somebody", R["cupChipTip"])
         self.assertEqual(R["cupBand"], 0)                                                              # roto rank does not decide the playoffs: no band or cut line on the roto tables
         self.assertGreater(R["rb"], 0)                                                                 # Rank cells are league-table badges
@@ -412,13 +416,23 @@ class Browser(unittest.TestCase):
         self.assertIn("No arrows: Yahoo's standings do not count Wk 3 yet.", self.R["behind"]["said"])
 
     def test_member_league_champions_get_a_star_and_the_holders_stay_apart(self):
+        chips = {c["text"]: c for c in self.R["cupStand"]["chips"]}
+        champ, holder, other = chips["\u2605 SA 1"], chips["SC 1"], chips["SA 2"]
+        self.assertIn("rgb(127, 141, 168)", champ["fill"])                                           # solid chrome silver, with the league colour as a dot
+        self.assertEqual(champ["dot"], "rgb(0, 32, 96)")
+        self.assertIn("rgb(232, 187, 62)", holder["fill"])                                           # the holders in bright gold
+        self.assertEqual((holder["holder"], holder["champ"], holder["crowned"], holder["dot"]), (True, False, True, None))
+        self.assertEqual((other["fill"], other["dot"], other["champ"], other["holder"]), ("none", None, False, False))
+        dark = self.R["cupDark"]                                                                     # dark mode: a deeper silver, the same gold
+        self.assertIn("rgb(113, 128, 155)", dark["\u2605 SA 1"])
+        self.assertIn("rgb(232, 187, 62)", dark["SC 1"])
         s = self.R["cupStand"]
         self.assertEqual((s["badges"], s["moves"], s["inside"]), (18, 18, 0))                          # rank badges and arrows side by side, never one inside the other
-        for text, champ, tip, crowned in s["chips"]:
-            self.assertEqual(champ, text.startswith("\u2605"), text)
-            self.assertEqual("champion" in tip, champ, tip)
-            self.assertFalse(champ and crowned, text)
-        self.assertEqual([c[0] for c in s["chips"] if c[1]], ["\u2605 SA 1"])
+        for c in s["chips"]:
+            self.assertEqual(c["champ"], c["text"].startswith("\u2605"), c)
+            self.assertEqual("champion" in c["tip"], c["champ"], c)
+            self.assertEqual(c["holder"], c["crowned"], c)
+        self.assertEqual([c["text"] for c in s["chips"] if c["champ"]], ["\u2605 SA 1"])
         self.assertIn("champion of that league", s["key"])
 
     def test_the_standings_are_split_into_tiers_and_keep_that_order(self):

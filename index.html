@@ -300,8 +300,12 @@ body.static .sheet{box-shadow:none;width:100%}
 .sheet.cup .cuphead .holders span{color:#9fb8ff;font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:.8em}
 .lgchip{display:inline-flex;align-items:center;flex:none;margin-left:.4em;padding:.1em .5em;border-radius:999px;background:var(--chip,#0a1a4d);color:#fff;font:800 .64em/1.4 Manrope,Inter,"Noto Sans","Segoe UI",Arial,sans-serif;letter-spacing:.05em;text-transform:uppercase;box-shadow:inset 0 0 0 1px #ffffff40;white-space:nowrap;vertical-align:middle}
 .lgchip.sub{box-shadow:inset 0 0 0 1px #ffffff40,0 0 0 1.5px var(--chip,#0a1a4d)}
-/* a member league's champion: a silver ring and a star (gold and the crown stay with the holders) */
-.lgchip.champ{box-shadow:inset 0 0 0 1px #ffffff59,0 0 0 2px #aeb9cc;margin-right:2px}html[data-theme=dark] .lgchip.champ{box-shadow:inset 0 0 0 1px #ffffff59,0 0 0 2px #d3dcee}
+/* two metals, larger than the plain tags and raised off the row: the holders wear gold, each member league's champion wears chrome silver with its league colour as a dot */
+.lgchip.holder,.lgchip.champ{font-size:.74em;padding:.12em .65em;margin-right:3px;text-shadow:0 1px 0 #ffffff99}
+.lgchip.holder{background:linear-gradient(135deg,#fff1b8 0,#e8bb3e 28%,#fff6cc 47%,#c28f1d 74%,#efd37a 100%);color:#2e2100;box-shadow:0 0 0 1.5px #855f0c,0 2px 5px #5a3f0066}
+.lgchip.champ{background:linear-gradient(135deg,#ffffff 0,#b9c5d8 28%,#ffffff 47%,#7f8da8 74%,#d3dbe8 100%);color:#0b1530;box-shadow:0 0 0 1.5px #3f4d6b,0 2px 5px #14213d66;padding-left:.45em}
+.lgchip.champ::before{content:"";flex:none;width:.8em;height:.8em;border-radius:50%;background:var(--chip,#0a1a4d);box-shadow:0 0 0 1px #00000040;margin-right:.35em}
+html[data-theme=dark] .lgchip.champ{background:linear-gradient(135deg,#e4e9f2 0,#a3b0c6 28%,#e9edf5 47%,#71809b 74%,#bcc6d8 100%);box-shadow:0 0 0 1px #8e9cb8}html[data-theme=dark] .lgchip.holder{box-shadow:0 0 0 1.5px #fff0b0,0 0 9px #f6c945b0}
 .cup .st th.team.q::before,.cup .st th.team.lead::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--qband)}
 .cup .st th.team.lead::before{background:linear-gradient(180deg,#f3d27a,#c9972b)}
 .cup .st th.team.me.q::before,.cup .st th.team.me.lead::before{left:4px}
@@ -748,7 +752,7 @@ function leagueChamp(id){var i=cupInfo(id);return !!i&&i.rank===1&&!isChamp(id);
 function chipTip(id){var i=cupInfo(id),l=i&&cup().leagues&&cup().leagues[i.league]||{};if(!i)return "";
  return (l.label||i.league)+(leagueChamp(id)?" champion":i.rank!=null?", "+ordinal(i.rank)+" place":"")+(i.substitute?" · playing in place of "+i.substitute:"")+(i.also&&i.also.length?" · also qualified as "+i.also.join(", "):"");}
 function chipEl(id){var i=cupInfo(id);if(!i)return null;var l=cup().leagues&&cup().leagues[i.league]||{},t=chipTip(id);
- return h("span",{class:"lgchip"+(i.substitute?" sub":"")+(leagueChamp(id)?" champ":""),title:t,"aria-label":t,style:l.color?"--chip:"+l.color:null},[(leagueChamp(id)?"\u2605 ":"")+i.league+(i.rank!=null?" "+i.rank:"")+(i.substitute?"*":"")]);}
+ return h("span",{class:"lgchip"+(i.substitute?" sub":"")+(leagueChamp(id)?" champ":isChamp(id)?" holder":""),title:t,"aria-label":t,style:l.color?"--chip:"+l.color:null},[(leagueChamp(id)?"\u2605 ":"")+i.league+(i.rank!=null?" "+i.rank:"")+(i.substitute?"*":"")]);}
 function nameNodes(id){var ch=chipEl(id),champ=isChamp(id);if(!ch&&!champ)return [name(id)];
  var k=[h("span",{class:"t",text:name(id)})];if(champ)k.push(crownEl());if(ch)k.push(ch);return [h("span",{class:"nm"},k)];}   /* the crown and chip sit outside the ellipsis, so a long name cannot push them out */
 function nameInline(id){return isChamp(id)?[name(id)," ",crownEl()]:[name(id)];}
