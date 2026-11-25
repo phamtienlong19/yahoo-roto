@@ -154,6 +154,15 @@ class AllPlayAndReport(unittest.TestCase):
         for bad in (None, {}, "x", {"teams": {}}, {"teams": {"99": {"league": "SA"}}}):
             self.assertIsNone(yr.resolve_cup(bad, names), bad)
 
+    def test_the_standings_tiers_come_from_the_playoff_setting_and_the_house_rules(self):
+        self.assertEqual(yr.configured_tiers("207464"), {"consolationTo": 12, "noKeepers": 2})
+        self.assertIsNone(yr.configured_tiers("85092"))
+        self.assertEqual([yr.tiers_block({"playoff_teams": n})["byes"] for n in (4, 6, 7, 8)], [0, 2, 1, 0])          # six teams: the top two sit out round one
+        got = yr.tiers_block({"playoff_teams": 6, "divisions": {1: "East", 2: "West"}, "div_winners": True}, {"consolationTo": 12, "noKeepers": 2})
+        self.assertEqual(got, {"spots": 6, "byes": 2, "divisionWinners": True, "divisions": {"1": "East", "2": "West"}, "consolationTo": 12, "noKeepers": 2})
+        self.assertNotIn("consolationTo", yr.tiers_block({"playoff_teams": 8}, {"consolationTo": 8}))             # a consolation line inside the playoffs makes no sense
+        self.assertIsNone(yr.tiers_block({"playoff_teams": None}, {"noKeepers": 2}))
+
     def test_the_cups_block_in_leagues_json_is_read_and_the_super_cup_lists_16_teams(self):
         cup = yr.configured_cup("212003")
         self.assertEqual(len(cup["teams"]), 16)
