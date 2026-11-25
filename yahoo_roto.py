@@ -41,6 +41,7 @@ UA = "yahoo-roto/1.0 (read-only; public pages)"
 RETRIES = 2                                                              # extra attempts for a request that failed in a way that may pass (timeout, 5xx, 429)
 BACKOFF = (2, 6)                                                         # seconds to wait before the 2nd and 3rd attempt
 TTL = {"settings": 12 * 3600, "standings": 6 * 3600, "weeks": 6 * 3600}   # pages that hardly ever change are not fetched on every pass
+STANDINGS_BEHIND_TTL = 1800          # ... but while Yahoo's standings table counts other games than the finished weeks (a week has just closed), the copy is read again this soon
 STAMP = re.compile(r"<!--yr-fetched:(\d+(?:\.\d+)?)-->\n")
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
@@ -1414,6 +1415,12 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
         views["w%d" % wk["week"]] = _week_view(c, wk, specs, ids)
     comps = composites(weeks_data, cores, specs, ids, views["season"])
     composites_final = composites(weeks_data[:done], cores[:done], specs, ids, views["seasonFinal"]) if live and done >= 1 else None
+    if done >= 1 and st.get("standings") and standings_behind(st["standings"], (composites_final or comps)["realRecord"]):
+        try:                                                              # at most one more request a pass, and only while the table is out of step
+            fresh = parse_standings(Fetcher(delay=delay, cache=cache).get(base + "?lhst=stand", ttl=STANDINGS_BEHIND_TTL), league)
+            st["standings"] = {t: r for t, r in fresh.items() if t in teams} or st["standings"]
+        except RotoError as e:
+            print("note: could not read the standings again (%s)" % e, file=sys.stderr)
     odds = None
     if done >= 1:
         try:
@@ -1437,6 +1444,16 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
     if cup:
         doc["cup"] = cup                                                 # only for a cup league: every other report is byte for byte what it was
     return doc
+
+
+def standings_behind(standings, records):
+    """True when Yahoo's standings table counts a different number of games than the finished weeks do for some team (`records` = composites realRecord): neither its
+    category games nor its matchups, so the table (or our copy of it) is from before the last week closed."""
+    for t, r in standings.items():
+        mine = records.get(str(t))
+        if mine and sum(r["record"]) not in (sum(mine["catRecord"]), sum(mine["record"])):
+            return True
+    return False
 
 
 def settling(wk, now):

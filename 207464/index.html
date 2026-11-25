@@ -102,18 +102,22 @@ html[data-theme=dark] .st td.lvl{background:#4a3a14;color:#f2c97a}html[data-them
 .st td.left,.st th.left{text-align:left;padding-left:.8em}
 .st td.wide{min-width:6em}
 .chips{display:inline-flex;gap:.25em;vertical-align:middle}
-.chips span{font-family:var(--mono);display:inline-block;min-width:1.9em;padding:.12em .3em;border-radius:.3em;font-size:.78em;font-weight:700;background:#fff;border:1px solid #e6ebef}
+.chips span{font-family:var(--mono);display:inline-block;min-width:1.9em;padding:.12em .3em;border-radius:.3em;font-size:.78em;font-weight:700;background:var(--chip-bg,#fff);border:1px solid var(--chip-line,#e6ebef)}
 .chips span.green-strong{background:var(--green-strong);color:#164629}.chips span.green-soft{background:var(--green-soft);color:#27543b}
 .chips span.red-strong{background:var(--red-strong);color:#662d38}.chips span.red-soft{background:var(--red-soft);color:#72404a}
 .chips span.dark-green{background:var(--dark-green);color:#143f27}.chips span.green{background:var(--green);color:#1d4a31}.chips span.light-green{background:var(--light-green);color:#27543b}
 .chips span.light-red{background:var(--light-red);color:#6a3d46}.chips span.red{background:var(--red);color:#6d3641}.chips span.dark-red{background:var(--dark-red);color:#5b2430}.chips span.none{color:#97a5b3;background:transparent;border-style:dashed}
 .st td.chipc{padding-left:.5em;padding-right:.5em}
-.st td.opp{text-align:left;padding-left:.7em;padding-right:.7em;font-family:Inter,"Noto Sans","Segoe UI",Arial,sans-serif;font-weight:600}.st td.opp span{display:block;max-width:clamp(92px,17cqw,290px);overflow:hidden;text-overflow:ellipsis}
+.st td.opp{text-align:left;padding-left:.7em;padding-right:.7em;font-family:Inter,"Noto Sans","Segoe UI",Arial,sans-serif;font-weight:600}.st td.opp .ow{display:flex;align-items:center;gap:.5em}.st td.opp .chips{flex:none}.st td.opp .chips span{min-width:2.1em;text-align:center}.st td.opp .on{display:block;min-width:0;max-width:clamp(92px,13cqw,260px);overflow:hidden;text-overflow:ellipsis}
+.st td.sc .chips span{font-size:.95em;min-width:3.2em;text-align:center;padding:.2em .35em}
+.st td.plc .rkn:not(.rb){display:block;line-height:1.15}.st td.plc .rkn.rb{display:flex;width:max-content;margin:0 auto}.st td.plc .mv{display:block;margin-top:.15em;font-size:.6em;line-height:1;font-weight:800;letter-spacing:0}.st td.plc .mv.up{color:#1d7a46}.st td.plc .mv.down{color:#b02a46}.st td.plc .mv.same{color:#a3b0bd}
+html[data-theme=dark] .st td.plc .mv.up{color:#5fd08d}html[data-theme=dark] .st td.plc .mv.down{color:#ff8fa3}html[data-theme=dark] .st td.plc .mv.same{color:#6f8091}
+.st thead tr.grp th.now span{color:var(--blue);border-bottom:2px solid var(--blue)}
 /* live standings: the rank leads, pinned beside the team name when the table scrolls sideways */
 .st.fixed{--plc:clamp(36px,5cqw,84px)}.st.fixed .plc{position:sticky;left:0;z-index:2;width:var(--plc);min-width:var(--plc);max-width:var(--plc);padding-left:0;padding-right:0;background:inherit}
 .st.fixed th.team{left:var(--plc);text-align:left;padding-left:.4em}.st.fixed th.team .nm{justify-content:flex-start}.st.fixed thead th.plc{z-index:3;background:#fff;text-align:center;padding-right:0}.st.fixed thead th.team{text-align:left;padding-left:.4em}
 tr.me-row>td.plc{background:#eaf2fa}html[data-theme=dark] .st.fixed thead th.plc{background:#171e26}html[data-theme=dark] tr.me-row>td.plc{background:#1d3550!important}
-@container (max-width:520px){.st.fixed{--plc:32px}.st.fixed th.team{min-width:76px;max-width:76px;padding-right:.45em}.st.fixed tbody td{min-width:0;padding-left:.25em;padding-right:.25em}.st.fixed td.opp{padding-left:.4em;padding-right:.2em}.st.fixed td.opp span{min-width:0;max-width:52px}.st.fixed th.team .nm{flex-wrap:wrap;justify-content:flex-start;row-gap:1px}.st.fixed th.team .nm .t{flex:0 0 100%;text-align:left}.st.fixed th.team .nm .lgchip,.st.fixed th.team .nm .crown{margin-left:0;margin-right:.3em}.st.fixed thead th{letter-spacing:0}.st.fixed thead th:not(.plc){min-width:0}}
+@container (max-width:520px){.st.fixed{--plc:32px}.st.fixed th.team{min-width:76px;max-width:76px;padding-right:.45em}.st.fixed tbody td{min-width:0;padding-left:.25em;padding-right:.25em}.st.fixed td.opp{padding-left:.4em;padding-right:.2em}.st.fixed td.opp .ow{gap:.3em}.st.fixed td.opp .chips span{min-width:1.8em;padding-left:.15em;padding-right:.15em}.st.fixed td.opp .on{max-width:44px}.st.fixed td.sc .chips span{min-width:2.6em;padding-left:.15em;padding-right:.15em}.st.fixed th.team .nm{flex-wrap:wrap;justify-content:flex-start;row-gap:1px}.st.fixed th.team .nm .t{flex:0 0 100%;text-align:left}.st.fixed th.team .nm .lgchip,.st.fixed th.team .nm .crown{margin-left:0;margin-right:.3em}.st.fixed thead th{letter-spacing:0}.st.fixed thead th:not(.plc){min-width:0}}
 .st tbody tr.tier{height:auto}.st tbody tr.tier th{text-align:left;background:#e8f0f7;color:#2c4a66;font-size:.7em;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:.75em .8em .6em;border-top:3px solid #7fa3c3;border-bottom:1px solid #c9d7e3}
 .st tbody tr.tier th span{display:inline-block;position:sticky;left:.8em}
 .st tbody tr.tier.t-bye th{background:#fdf0cd;color:#6f4a00;border-top-color:#d9a520}
@@ -195,7 +199,7 @@ tr.me-row>th.team{background:#eaf2fa!important}
  nav button{flex:0 0 auto;white-space:nowrap}
 }
 /* ---- dark theme: only html[data-theme=dark] (set by the head script / toggle; never in static mode, so PNGs stay light) ---- */
-html[data-theme=dark]{color-scheme:dark;--ink:#e7edf3;--stripe:#1b232c;--green-strong:#2f7d52;--green-soft:#1f4535;--red-strong:#8c3b4b;--red-soft:#472631;
+html[data-theme=dark]{color-scheme:dark;--chip-bg:#171e26;--chip-line:#2b3744;--ink:#e7edf3;--stripe:#1b232c;--green-strong:#2f7d52;--green-soft:#1f4535;--red-strong:#8c3b4b;--red-soft:#472631;
  --dark-green:#2f7d52;--green:#2a6a47;--light-green:#1f4535;--white:#171e26;--light-red:#472631;--red:#6e3040;--dark-red:#8c3b4b;--actual:#9a8cf0}
 html[data-theme=dark] body{background:#0f141a}
 html[data-theme=dark] .sheet{background:#171e26;box-shadow:0 1px 2px #0006,0 8px 28px #0004}
@@ -221,7 +225,6 @@ html[data-theme=dark] .st th.tot,html[data-theme=dark] .st td.tot{background-ima
 html[data-theme=dark] .st td.pos{color:#5fd08d}html[data-theme=dark] .st td.neg{color:#ff8fa3}
 html[data-theme=dark] .st td.king .small{color:#7f90a2}
 html[data-theme=dark] .st td.kv{color:#6db3ec;background-image:linear-gradient(#4aa3e81a,#4aa3e81a)}html[data-theme=dark] .st td.kw{color:#8ea0b3}
-html[data-theme=dark] .chips span{background:#171e26;border-color:#2b3744}
 html[data-theme=dark] .note,html[data-theme=dark] .stamp,html[data-theme=dark] .hint{color:#7f90a2}
 html[data-theme=dark] .legend{color:#9fb0c1}html[data-theme=dark] .legend .sw{background:#171e26;border-color:#2b3744}html[data-theme=dark] .legend .chip{border-color:#33414f}
 html[data-theme=dark] .mx,html[data-theme=dark] .mx th,html[data-theme=dark] .mx td{border-color:#2b3744}
@@ -297,6 +300,8 @@ body.static .sheet{box-shadow:none;width:100%}
 .sheet.cup .cuphead .holders span{color:#9fb8ff;font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:.8em}
 .lgchip{display:inline-flex;align-items:center;flex:none;margin-left:.4em;padding:.1em .5em;border-radius:999px;background:var(--chip,#0a1a4d);color:#fff;font:800 .64em/1.4 Manrope,Inter,"Noto Sans","Segoe UI",Arial,sans-serif;letter-spacing:.05em;text-transform:uppercase;box-shadow:inset 0 0 0 1px #ffffff40;white-space:nowrap;vertical-align:middle}
 .lgchip.sub{box-shadow:inset 0 0 0 1px #ffffff40,0 0 0 1.5px var(--chip,#0a1a4d)}
+/* a member league's champion: a silver ring and a star (gold and the crown stay with the holders) */
+.lgchip.champ{box-shadow:inset 0 0 0 1px #ffffff59,0 0 0 2px #aeb9cc;margin-right:2px}html[data-theme=dark] .lgchip.champ{box-shadow:inset 0 0 0 1px #ffffff59,0 0 0 2px #d3dcee}
 .cup .st th.team.q::before,.cup .st th.team.lead::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--qband)}
 .cup .st th.team.lead::before{background:linear-gradient(180deg,#f3d27a,#c9972b)}
 .cup .st th.team.me.q::before,.cup .st th.team.me.lead::before{left:4px}
@@ -485,6 +490,12 @@ function split(doc,ws,basis){
  out.order=order;return out;}
 /* Games behind first place: half of how far a team's wins-minus-losses trails the best one (ties count for neither side), the way Yahoo counts GB. R: composites.realRecord -> {id: games} */
 function gamesBehind(R){var d={},best=-Infinity,out={};Object.keys(R).forEach(function(t){var r=R[t].catRecord;d[t]=r[0]-r[1];if(d[t]>best)best=d[t];});Object.keys(d).forEach(function(t){out[t]=(best-d[t])/2;});return out;}
+/* The live standings' order: by win share, level teams in Yahoo's last order (so a tie alone never moves anyone), then category margin. R: composites.realRecord, yahoo:
+   report.yahooStandings. -> {id: {rank (1..n, no ties), move: places gained since Yahoo's rank, or null}} */
+function standingsRanks(R,yahoo){var ids=Object.keys(R),out={},q=function(x){return Math.round((x||0)*1e9);};
+ function was(t){var y=yahoo&&yahoo[t];return y&&y.rank!=null?y.rank:null;}
+ ids.sort(function(a,b){var x=was(a),y=was(b),m=R[a].catRecord,n=R[b].catRecord;return (q(R[b].catWinPct)-q(R[a].catWinPct))||((x==null?1e9:x)-(y==null?1e9:y))||((n[0]-n[1])-(m[0]-m[1]))||(a-b);});
+ ids.forEach(function(t,k){var w=was(t);out[t]={rank:k+1,move:w==null?null:w-(k+1)};});return out;}
 /* Where the standings split, by Yahoo's playoff rule (qualifiers: with divisions every division's leader gets in, then the best of the rest) with seeds in overall order.
    teams: [{id, points (win share), tb (breaks level teams, higher first), div}], cfg: report.tiers. -> {order: playoff seeds first, then the rest; tier: {id: "bye" | "playoff" |
    "consolation" | "out" | "nokeep"}; leader: {id: division}; level: [[a, b]] teams level on the win share on opposite sides of a line (none when `settled`: tb is Yahoo's own order)} */
@@ -522,7 +533,7 @@ function qualifiers(teams,spots,useDiv){
  var inN=order.filter(function(t){return inSet[t.id]&&!leader[t.id];}),outT=order.filter(function(t){return !inSet[t.id];});
  if(inN.length&&outT.length&&outT[0].points===inN[inN.length-1].points){var edge=outT[0].points;order.forEach(function(t){if(t.points===edge&&!leader[t.id])level[t.id]=true;});}
  return {order:order.map(function(t){return t.id;}),in:inSet,leader:leader,level:level};}
-return {range:range,gamesBehind:gamesBehind,tiers:tiers,yahooCheck:yahooCheck,realGame:realGame,oppByWeek:oppByWeek,movers:movers,qualifiers:qualifiers,sos:sos,sosRest:sosRest,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
+return {range:range,standingsRanks:standingsRanks,gamesBehind:gamesBehind,tiers:tiers,yahooCheck:yahooCheck,realGame:realGame,oppByWeek:oppByWeek,movers:movers,qualifiers:qualifiers,sos:sos,sosRest:sosRest,form:form,split:split,catLuckWeek:catLuckWeek,places:places,cls:cls,rankCls:rankCls,matrixCls:matrixCls,fmtVal:fmtVal,fmtPts:fmtPts,pct:pct,pts:pts,signed:signed,sortKey:sortKey,tl:tl};
 })();
 </script>
 <script>
@@ -698,7 +709,7 @@ function sheet(kind,title,sub,body,note,shade){
  inner=inner.concat(body);
  if(shade)inner.push(h("div",{class:"shadenote",text:shade}));
  if(note&&STATIC)inner.push(h("div",{class:"note",text:note}));
- if(c)inner.push(h("div",{class:"cupkey"},[h("span",{class:"lgchip",style:"--chip:#002060",text:"SA 1"})," = the league a team qualified from and its finish there (* playing in place of the qualifier)"]));
+ if(c)inner.push(h("div",{class:"cupkey"},[h("span",{class:"lgchip",style:"--chip:#002060",text:"SA 2"})," = the league a team qualified from and its finish there. \u2605 = champion of that league (* playing in place of the qualifier)"]));
  if(STATIC){var a=asOf();inner.push(h("div",{class:"stamp",text:(S.season?"Season":"Week "+weekNo())+(cur()&&(S.season||weekNo()===cur())&&!(thruBoard()&&thruWeek()<cur())?" (in progress) · as of "+a.text:" · final"+(settleNote(weekNo())?" · "+settleNote(weekNo()):""))}));}
  return h("section",{class:"sheet "+kind+(c?" cup":"")},[h("div",{class:"in"},inner)]);}
 function scroller(t){return h("div",{class:"tscroll",tabindex:"0",role:"region","aria-label":"Table, scrolls sideways"},[t]);}
@@ -715,8 +726,9 @@ function pinnable(el,id){if(STATIC)return el;el.setAttribute("data-id",String(id
 function cupPass(){[].forEach.call(document.querySelectorAll("th.team.lead"),function(x){x.classList.remove("lead");});if(!cup())return;
  [].forEach.call(document.querySelectorAll(".sheet table.st"),function(tb){if(tb.classList.contains("mu")||!tb.tHead||!tb.tBodies[0])return;var hr=tb.tHead.rows[tb.tHead.rows.length-1],ci=-1;
   [].forEach.call(hr.cells,function(x,j){if(ci<0&&x.textContent.trim()==="Rank")ci=j;});if(ci<0)return;
-  [].forEach.call(tb.tBodies[0].rows,function(r){var cell=r.cells[ci],m=cell&&/\d+/.exec(cell.textContent),first=!!m&&+m[0]===1,th=r.querySelector("th.team");if(!cell||r.classList.contains("tier"))return;
-   if(cell.firstChild&&cell.firstChild.className&&String(cell.firstChild.className).indexOf("rb")===0)cell.firstChild.className="rb"+(first?" gold":"");
+  [].forEach.call(tb.tBodies[0].rows,function(r){var cell=r.cells[ci],num=cell&&cell.querySelector(".rkn"),m=cell&&/\d+/.exec((num||cell).textContent),first=!!m&&+m[0]===1,th=r.querySelector("th.team");if(!cell||r.classList.contains("tier"))return;
+   if(num)num.className="rkn rb"+(first?" gold":"");
+   else if(cell.firstChild&&cell.firstChild.className&&String(cell.firstChild.className).indexOf("rb")===0)cell.firstChild.className="rb"+(first?" gold":"");
    else{var t=cell.textContent;cell.textContent="";cell.appendChild(h("span",{class:"rb"+(first?" gold":""),text:t}));}
    if(th&&th.classList.contains("team"))th.classList.toggle("lead",first);});});}
 function markMe(){[].forEach.call(document.querySelectorAll("th.me"),function(x){if(x.parentNode)x.parentNode.classList.add("me-row");});}
@@ -731,10 +743,12 @@ var TROPHY_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v5.2
 function trophyEl(){var e=h("i",{class:"tro","aria-hidden":"true"});e.innerHTML=TROPHY_SVG;return e;}
 function cupInfo(id){var c=cup();return c&&c.teams&&c.teams[String(id)]||null;}
 function ordinal(n){var m=n%100,t=n%10;return n+(m>=11&&m<=13?"th":t===1?"st":t===2?"nd":t===3?"rd":"th");}
+/* The champion of a member league: finished 1st there. The holders of this cup are marked on their own (gold tag, crown), so they never take the star. */
+function leagueChamp(id){var i=cupInfo(id);return !!i&&i.rank===1&&!isChamp(id);}
 function chipTip(id){var i=cupInfo(id),l=i&&cup().leagues&&cup().leagues[i.league]||{};if(!i)return "";
- return (l.label||i.league)+(i.rank!=null?", "+ordinal(i.rank)+" place":"")+(i.substitute?" · playing in place of "+i.substitute:"")+(i.also&&i.also.length?" · also qualified as "+i.also.join(", "):"");}
+ return (l.label||i.league)+(leagueChamp(id)?" champion":i.rank!=null?", "+ordinal(i.rank)+" place":"")+(i.substitute?" · playing in place of "+i.substitute:"")+(i.also&&i.also.length?" · also qualified as "+i.also.join(", "):"");}
 function chipEl(id){var i=cupInfo(id);if(!i)return null;var l=cup().leagues&&cup().leagues[i.league]||{},t=chipTip(id);
- return h("span",{class:"lgchip"+(i.substitute?" sub":""),title:t,"aria-label":t,style:l.color?"--chip:"+l.color:null},[i.league+(i.rank!=null?" "+i.rank:"")+(i.substitute?"*":"")]);}
+ return h("span",{class:"lgchip"+(i.substitute?" sub":"")+(leagueChamp(id)?" champ":""),title:t,"aria-label":t,style:l.color?"--chip:"+l.color:null},[(leagueChamp(id)?"\u2605 ":"")+i.league+(i.rank!=null?" "+i.rank:"")+(i.substitute?"*":"")]);}
 function nameNodes(id){var ch=chipEl(id),champ=isChamp(id);if(!ch&&!champ)return [name(id)];
  var k=[h("span",{class:"t",text:name(id)})];if(champ)k.push(crownEl());if(ch)k.push(ch);return [h("span",{class:"nm"},k)];}   /* the crown and chip sit outside the ellipsis, so a long name cannot push them out */
 function nameInline(id){return isChamp(id)?[name(id)," ",crownEl()]:[name(id)];}
@@ -963,29 +977,44 @@ function boardSheet(b){var banner=null,tfull=null,moversEl=null,acc=null,C=comp(
    td(it.v.result,it.v.result==="W"?"green-soft":it.v.result==="L"?"red-soft":"lvl"),td(P.signed(it.x,2),HC?null:"total "+slk[it.k])]));});
   note="Tap a column to sort. "+(HC?"Category luck = categories won minus categories your stats earned that week. ":"")+"Matchup luck = result minus all-play Win%.";shade=(HC?"Category luck":"Matchup luck")+" is ranked across all rows; Margin uses the category-score shades.";}
  else if(b==="livestand"){var RR=C.realRecord,TW=C.weeks[C.weeks.length-1],NX=TW+1,LIVE=cur()===TW,Y=LIVE?null:P.yahooCheck(C,DOC.yahooStandings),YS=Y&&Y.state==="match"?DOC.yahooStandings:null,
-   CF=DOC.tiers||null,DV=(CF&&CF.divisions)||{},ids=Object.keys(RR),pv={},nopp={};
+   CF=DOC.tiers||null,DV=(CF&&CF.divisions)||{},ids=Object.keys(RR),n_=ids.length,pv={},nopp={};
   ids.forEach(function(i){pv[i]=RR[i].catWinPct;});var hasDiv=Object.keys(DV).length>0,cp=shadeCol(ids,pv),RKS=ids.map(function(i){return RR[i].rank;});
+  /* arrows: the live place against Yahoo's own rank, only while Yahoo's table counts exactly the finished weeks */
+  var FC=LIVE&&hasFinal()?DOC.compositesFinal:null,FY=FC?P.yahooCheck(FC,DOC.yahooStandings):null,DW=FC?FC.weeks[FC.weeks.length-1]:null,
+   SR=FY&&FY.state!=="behind"?P.standingsRanks(RR,DOC.yahooStandings):null,RK={};
+  ids.forEach(function(i){RK[i]=YS?YS[i].rank:SR?SR[i].rank:RR[i].rank;});
   /* who is next: the pairings of week X+1, from its own matchup page once it has started, else from the schedule read ahead */
   if(DOC.weeks.indexOf(NX)>=0)ids.forEach(function(i){var v=DOC.composites.weekly[i][NX];if(v&&v.opp!=null)nopp[i]=v.opp;});
   else((DOC.odds&&DOC.odds.schedule&&DOC.odds.schedule[NX])||[]).forEach(function(p){nopp[p[0]]=p[1];nopp[p[1]]=p[0];});
   var hasNext=Object.keys(nopp).length>0,GB=P.gamesBehind(RR),
-   list=ids.map(function(i){var c=RR[i].catRecord;return {id:i,points:pv[i]||0,tb:YS?-YS[i].rank:c[0]-c[1],div:DV[i]||null};}),
+   list=ids.map(function(i){var c=RR[i].catRecord;return {id:i,points:pv[i]||0,tb:YS||SR?-RK[i]:c[0]-c[1],div:DV[i]||null};}),
    TR=CF?P.tiers(list,CF,!!YS):null,o=TR?TR.order:list.sort(function(a,c){return (c.points-a.points)||(c.tb-a.tb)||(a.id-c.id);}).map(function(t){return t.id;});
   title=LIVE?"Live Standings":"Standings after "+wkl(TW);tfull=lg()+" "+title;sub=LIVE?"If the season ended today: records through "+wkl(TW)+", still being played":"If the season ended after "+wkl(TW)+", the last finished week";
-  heads=[["Rank","plc",YS?"Yahoo's rank":"By win share; level teams share a place"],["Team","team"],["Record",null,"Categories won, lost and tied; shaded by win share"],["GB",null,"Games behind first place; a dash means level with the leader"],[wkl(TW)+" vs","left",(LIVE?"This week's":"That week's")+" opponent"],["Score",null,"Category score in "+wkl(TW)+(LIVE?" so far":"")]].concat(hasNext?[[wkl(NX)+" vs","left","Next opponent"]]:[],hasDiv?[["Div",null,"Division"]]:[]);
-  var opp=function(i){return i==null?td("–","left"):h("td",{class:"left opp",title:name(i)+" ("+RR[i].catRecord.join("-")+")"},[h("span",{text:name(i)})]);},
-   LB={bye:"1st-round bye",playoff:"Playoffs",consolation:"Consolation bracket",out:CF&&CF.consolationTo?"No bracket":"Outside the playoffs",nokeep:"No keepers next season"},was=null;
+  heads=[["Rank","plc",YS?"Yahoo's rank":SR?"Live place; the arrow compares it with Yahoo's last rank":"By win share; level teams share a place"],["Team","team"],["Record",null,"Categories won, lost and tied; shaded by win share"],["GB",null,"Games behind first place; a dash means level with the leader"],
+   ["Opponent","left sep",(LIVE?"This week's":"That week's")+" opponent, with its rank in this table"],["Score",null,"Category score in "+wkl(TW)+(LIVE?" so far":"")]].concat(hasNext?[["Opponent","left sep","Opponent in "+wkl(NX)+", with its rank in this table"]]:[],hasDiv?[["Div","sep","Division"]]:[]);
+  groups=[["",1,"plc"],["",1,"team"],["",2],[wkl(TW)+" \u00b7 "+(LIVE?"now":"played"),2,"sep"+(LIVE?" now":"")]].concat(hasNext?[[wkl(NX)+" \u00b7 "+(cur()===NX?"now":"next"),1,"sep"+(cur()===NX?" now":"")]]:[],hasDiv?[["",1,"sep"]]:[]);
+  var square=function(cls,text){return h("span",{class:"chips"},[h("span",{class:cls,text:text})]);},
+   /* the opponent with its place in this table: red = a strong opponent, green = a weak one (as on Strength of schedule) */
+   opp=function(i){if(i==null)return td("–","left sep");var k=RK[i];
+    return h("td",{class:"left opp sep",title:name(i)+" ("+RR[i].catRecord.join("-")+")"+(k==null?"":": "+ord(k)+" of "+n_)},[h("div",{class:"ow"},[square(k==null?"none":P.rankCls(n_+1-k,n_),k==null?"–":String(k)),h("span",{class:"on",text:name(i)})])]);},
+   place=function(id){var r=RR[id],m=SR?SR[id].move:null,kids=[h("span",{class:"rkn",text:YS||SR?String(RK[id]):r.rank==null?"–":tl(r.rank,RKS)})];
+    if(m!=null){var was=DOC.yahooStandings[id].rank,said=(m>0?"Up "+m:m<0?"Down "+(-m):"No change")+" from Yahoo's "+ord(was)+" after "+wkl(DW);
+     kids.push(h("span",{class:"mv "+(m>0?"up":m<0?"down":"same"),title:said,"aria-label":said,text:m>0?"\u25b2"+m:m<0?"\u25bc"+(-m):"\u25cf"}));}
+    return h("td",{class:"rank plc"},kids);},
+   LB={bye:"1st-round bye",playoff:"Playoffs",consolation:"Consolation bracket",out:CF&&CF.consolationTo?"No bracket":"Outside the playoffs",nokeep:"No keepers next season"},was_=null;
   rows=[];o.forEach(function(id,k){var r=RR[id],v=C.weekly[id][TW],c=v&&v.result!=null?v.catRecord:null,t=TR&&TR.tier[id];
-   if(TR&&t!==was){was=t;var last=k;while(last+1<o.length&&TR.tier[o[last+1]]===t)last++;
+   if(TR&&t!==was_){was_=t;var last=k;while(last+1<o.length&&TR.tier[o[last+1]]===t)last++;
     rows.push(h("tr",{class:"tier t-"+t},[h("th",{colspan:String(heads.length)},[h("span",{text:LB[t]+" \u00b7 "+(last>k?(k+1)+"\u2013"+(last+1):String(k+1))})])]));}
-   rows.push(h("tr",{class:t?"t-"+t:null},[td(YS?String(YS[id].rank):r.rank==null?"–":tl(r.rank,RKS),"rank plc"),teamTh(id),td(r.catRecord.join("-"),"total "+cp[id]),td(GB[id]?String(GB[id]):"–"),opp(v?v.opp:null),h("td",{class:c?P.matrixCls(c[0]-c[1]):null,text:c?catsText(c):"–"})].concat(hasNext?[opp(nopp[id])]:[],
-    hasDiv?[td((DV[id]||"–")+(TR&&CF.divisionWinners&&TR.leader[id]?" leader":""),"left")]:[])));});
-  var said=LIVE?STATIC?null:"Yahoo's own standings count finished weeks only"+(hasFinal()?": choose the final view to check them.":"."):!Y?null:Y.state==="behind"?"Not checked: Yahoo's standings count a different number of games, so they may not have updated yet."
+   rows.push(h("tr",{class:t?"t-"+t:null},[place(id),teamTh(id),td(r.catRecord.join("-"),"total "+cp[id]),td(GB[id]?String(GB[id]):"–"),opp(v?v.opp:null),
+    h("td",{class:"sc",title:c?"vs "+name(v.opp):null},[c?square(P.matrixCls(c[0]-c[1]),catsText(c)):"–"])].concat(hasNext?[opp(nopp[id])]:[],
+    hasDiv?[td((DV[id]||"–")+(TR&&CF.divisionWinners&&TR.leader[id]?" leader":""),"left sep")]:[])));});
+  var said=LIVE?SR?"Arrows: places moved since Yahoo's standings after "+wkl(DW)+", which count finished weeks only.":FY?"No arrows: Yahoo's standings do not count "+wkl(DW)+" yet.":STATIC?null:"Yahoo's own standings count finished weeks only"+(hasFinal()?": choose the final view to check them.":".")
+    :!Y?null:Y.state==="behind"?"Not checked: Yahoo's standings count a different number of games, so they may not have updated yet."
     :Y.state==="match"?"\u2713 Matches Yahoo's standings through "+wkl(TW)+" ("+Y.matched+" of "+Y.total+" teams). Ranks are Yahoo's.":"\u26a0 Differs from Yahoo's standings: "+(Y.diff.length?Y.diff.map(function(i){return name(i)+" (Yahoo "+DOC.yahooStandings[i].record.join("-")+")";}).join(", "):Y.matched+" of "+Y.total+" teams matched")+".",
    tied=TR&&TR.level.length?"Level at a line: "+TR.level.map(function(p){return name(p[0])+" and "+name(p[1]);}).join("; ")+". Yahoo's tie-break decides.":null;
   if(said||tied)acc=h("div",null,[said,tied].filter(Boolean).map(function(x){return h("div",{class:"accline",role:"status",text:x});}));
-  note="Records are categories won, lost and tied. GB = games behind first place. "+(CF&&CF.divisionWinners?"Division leaders make the playoffs; seeds follow overall record. ":"")+(CF&&(CF.consolationTo||CF.noKeepers)?"The consolation and keeper lines are this league's own rules. ":"")+(LIVE?"The week in progress counts as it stands, so places move.":"");
-  shade="Record is ranked across the league; Score uses the category-score shades.";}
+  note="Records are categories won, lost and tied. GB = games behind first place. "+(SR?"Level records keep Yahoo's last order. ":"")+(CF&&CF.divisionWinners?"Division leaders make the playoffs; seeds follow overall record. ":"")+(CF&&(CF.consolationTo||CF.noKeepers)?"The consolation and keeper lines are this league's own rules.":"");
+  shade="Record is ranked across the league. Squares: opponent rank (red = tough, green = easy) and "+(LIVE?"this":"that")+" week's category score.";}
  else if(b==="form"){var ws=finished(),N=winN(),BS=basis(),cm=BS==="cats",unit=cm?"categories":"matchups";title="Recent Form";sub="Your real "+unit+" record lately, against the whole season";
   if(!N||ws.length<3)return sheet("data",lg()+" Recent Form",sub,[h("div",{class:"msg"},[h("b",{text:"Not enough weeks yet"}),"Recent form needs at least 3 finished weeks."])],null);
   var F=P.form(DOC,ws,N,BS),ids=Object.keys(F),lm={},sm={},cm_={};ids.forEach(function(i){lm[i]=F[i].last.pct;sm[i]=F[i].season.pct;cm_[i]=F[i].change;});

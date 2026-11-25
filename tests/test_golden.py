@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import golden  # noqa: E402
+import yahoo_roto as yr  # noqa: E402
 
 
 def drop_time(doc):
@@ -55,6 +56,31 @@ class Invariants(unittest.TestCase):
     def test_the_champion_and_format_version_are_set(self):
         self.assertEqual(self.doc["teams"][str(self.doc["champion"])], "sup fam")
         self.assertEqual(self.doc["schemaVersion"], 3)
+
+    def test_yahoos_standings_are_read_again_only_while_they_lag_the_finished_weeks(self):
+        pages = golden.build_pages(18, 4)
+        old = golden.build_pages(18, 3)["lhst=stand"]                                      # Yahoo's table as it was before the last week closed
+
+        def run(first):
+            asked = []
+
+            class Lagging(golden.FakeFetcher):
+                def get(self, url, ttl=None):
+                    if url.endswith("lhst=stand"):
+                        asked.append(ttl)
+                        return first if ttl == yr.TTL["standings"] else pages["lhst=stand"]
+                    return super().get(url, ttl)
+            fx, orig = Lagging(pages), yr.Fetcher
+            yr.Fetcher = lambda **k: fx
+            try:
+                return yr.report("9"), asked
+            finally:
+                yr.Fetcher = orig
+        doc, asked = run(old)
+        self.assertEqual(asked, [yr.TTL["standings"], yr.STANDINGS_BEHIND_TTL])
+        self.assertTrue(all(doc["yahooStandings"][t]["record"] == r["catRecord"] for t, r in doc["compositesFinal"]["realRecord"].items()))
+        doc, asked = run(pages["lhst=stand"])
+        self.assertEqual(asked, [yr.TTL["standings"]])                                     # in step: no extra request
 
     def test_rerunning_gives_the_same_numbers(self):
         self.assertEqual(drop_time(golden.build_report(18, 4)), drop_time(self.doc))
