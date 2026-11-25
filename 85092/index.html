@@ -109,7 +109,11 @@ html[data-theme=dark] .st td.lvl{background:#4a3a14;color:#f2c97a}html[data-them
 .chips span.light-red{background:var(--light-red);color:#6a3d46}.chips span.red{background:var(--red);color:#6d3641}.chips span.dark-red{background:var(--dark-red);color:#5b2430}.chips span.none{color:#97a5b3;background:transparent;border-style:dashed}
 .st td.chipc{padding-left:.5em;padding-right:.5em}
 .st td.opp{text-align:left;padding-left:.7em;padding-right:.7em;font-family:Inter,"Noto Sans","Segoe UI",Arial,sans-serif;font-weight:600}.st td.opp span{display:block;max-width:clamp(92px,17cqw,290px);overflow:hidden;text-overflow:ellipsis}
-@container (max-width:520px){.st.fixed th.team{min-width:86px;max-width:86px;padding-right:.45em}.st.fixed tbody td{min-width:0;padding-left:.25em;padding-right:.25em}.st.fixed td.opp{padding-left:.4em;padding-right:.2em}.st.fixed td.opp span{min-width:0;max-width:68px}.st.fixed thead th{min-width:0;letter-spacing:0}}
+/* live standings: the rank leads, pinned beside the team name when the table scrolls sideways */
+.st.fixed{--plc:clamp(36px,5cqw,84px)}.st.fixed .plc{position:sticky;left:0;z-index:2;width:var(--plc);min-width:var(--plc);max-width:var(--plc);padding-left:0;padding-right:0;background:inherit}
+.st.fixed th.team{left:var(--plc);text-align:left;padding-left:.4em}.st.fixed th.team .nm{justify-content:flex-start}.st.fixed thead th.plc{z-index:3;background:#fff;text-align:center;padding-right:0}.st.fixed thead th.team{text-align:left;padding-left:.4em}
+tr.me-row>td.plc{background:#eaf2fa}html[data-theme=dark] .st.fixed thead th.plc{background:#171e26}html[data-theme=dark] tr.me-row>td.plc{background:#1d3550!important}
+@container (max-width:520px){.st.fixed{--plc:32px}.st.fixed th.team{min-width:80px;max-width:80px;padding-right:.45em}.st.fixed tbody td{min-width:0;padding-left:.25em;padding-right:.25em}.st.fixed td.opp{padding-left:.4em;padding-right:.2em}.st.fixed td.opp span{min-width:0;max-width:62px}.st.fixed thead th{letter-spacing:0}.st.fixed thead th:not(.plc){min-width:0}}
 .st tbody tr.tier{height:auto}.st tbody tr.tier th{text-align:left;background:#e8f0f7;color:#2c4a66;font-size:.7em;font-weight:800;letter-spacing:.07em;text-transform:uppercase;padding:.75em .8em .6em;border-top:3px solid #7fa3c3;border-bottom:1px solid #c9d7e3}
 .st tbody tr.tier th span{display:inline-block;position:sticky;left:.8em}
 .st tbody tr.tier.t-bye th{background:#fdf0cd;color:#6f4a00;border-top-color:#d9a520}
@@ -707,7 +711,7 @@ function pinnable(el,id){if(STATIC)return el;el.setAttribute("data-id",String(id
 function cupPass(){[].forEach.call(document.querySelectorAll("th.team.lead"),function(x){x.classList.remove("lead");});if(!cup())return;
  [].forEach.call(document.querySelectorAll(".sheet table.st"),function(tb){if(tb.classList.contains("mu")||!tb.tHead||!tb.tBodies[0])return;var hr=tb.tHead.rows[tb.tHead.rows.length-1],ci=-1;
   [].forEach.call(hr.cells,function(x,j){if(ci<0&&x.textContent.trim()==="Rank")ci=j;});if(ci<0)return;
-  [].forEach.call(tb.tBodies[0].rows,function(r){var cell=r.cells[ci],m=cell&&/\d+/.exec(cell.textContent),first=!!m&&+m[0]===1,th=r.cells[0];if(!cell)return;
+  [].forEach.call(tb.tBodies[0].rows,function(r){var cell=r.cells[ci],m=cell&&/\d+/.exec(cell.textContent),first=!!m&&+m[0]===1,th=r.querySelector("th.team");if(!cell)return;
    if(cell.firstChild&&cell.firstChild.className&&String(cell.firstChild.className).indexOf("rb")===0)cell.firstChild.className="rb"+(first?" gold":"");
    else{var t=cell.textContent;cell.textContent="";cell.appendChild(h("span",{class:"rb"+(first?" gold":""),text:t}));}
    if(th&&th.classList.contains("team"))th.classList.toggle("lead",first);});});}
@@ -964,14 +968,14 @@ function boardSheet(b){var banner=null,tfull=null,moversEl=null,acc=null,C=comp(
    list=ids.map(function(i){var c=RR[i].catRecord;return {id:i,points:pv[i]||0,tb:YS?-YS[i].rank:c[0]-c[1],div:DV[i]||null};}),
    TR=CF?P.tiers(list,CF,!!YS):null,o=TR?TR.order:list.sort(function(a,c){return (c.points-a.points)||(c.tb-a.tb)||(a.id-c.id);}).map(function(t){return t.id;});
   title=LIVE?"Live Standings":"Standings after "+wkl(TW);tfull=lg()+" "+title;sub=LIVE?"If the season ended today: records through "+wkl(TW)+", still being played":"If the season ended after "+wkl(TW)+", the last finished week";
-  heads=["Team",["Record",null,"Categories won, lost and tied; shaded by win share"],[wkl(TW)+" vs","left",(LIVE?"This week's":"That week's")+" opponent"],["Score",null,"Category score in "+wkl(TW)+(LIVE?" so far":"")]].concat(hasNext?[[wkl(NX)+" vs","left","Next opponent"]]:[],[["Rank","sep",YS?"Yahoo's rank":"By win share; level teams share a place"]],hasDiv?[["Div",null,"Division"]]:[]);
+  heads=[["Rank","plc",YS?"Yahoo's rank":"By win share; level teams share a place"],["Team","team"],["Record",null,"Categories won, lost and tied; shaded by win share"],[wkl(TW)+" vs","left",(LIVE?"This week's":"That week's")+" opponent"],["Score",null,"Category score in "+wkl(TW)+(LIVE?" so far":"")]].concat(hasNext?[[wkl(NX)+" vs","left","Next opponent"]]:[],hasDiv?[["Div",null,"Division"]]:[]);
   var opp=function(i){return i==null?td("–","left"):h("td",{class:"left opp",title:name(i)+" ("+RR[i].catRecord.join("-")+")"},[h("span",{text:name(i)})]);},
    LB={bye:"1st-round bye",playoff:"Playoffs",consolation:"Consolation bracket",out:CF&&CF.consolationTo?"No bracket":"Outside the playoffs",nokeep:"No keepers next season"},was=null;
   rows=[];o.forEach(function(id,k){var r=RR[id],v=C.weekly[id][TW],c=v&&v.result!=null?v.catRecord:null,t=TR&&TR.tier[id];
    if(TR&&t!==was){was=t;var last=k;while(last+1<o.length&&TR.tier[o[last+1]]===t)last++;
     rows.push(h("tr",{class:"tier t-"+t},[h("th",{colspan:String(heads.length)},[h("span",{text:LB[t]+" \u00b7 "+(last>k?(k+1)+"\u2013"+(last+1):String(k+1))})])]));}
-   rows.push(h("tr",{class:t?"t-"+t:null},[teamTh(id),td(r.catRecord.join("-"),"total "+cp[id]),opp(v?v.opp:null),h("td",{class:c?P.matrixCls(c[0]-c[1]):null,text:c?catsText(c):"–"})].concat(hasNext?[opp(nopp[id])]:[],
-    [td(YS?String(YS[id].rank):r.rank==null?"–":tl(r.rank,RKS),"rank sep")],hasDiv?[td((DV[id]||"–")+(TR&&CF.divisionWinners&&TR.leader[id]?" leader":""),"left")]:[])));});
+   rows.push(h("tr",{class:t?"t-"+t:null},[td(YS?String(YS[id].rank):r.rank==null?"–":tl(r.rank,RKS),"rank plc"),teamTh(id),td(r.catRecord.join("-"),"total "+cp[id]),opp(v?v.opp:null),h("td",{class:c?P.matrixCls(c[0]-c[1]):null,text:c?catsText(c):"–"})].concat(hasNext?[opp(nopp[id])]:[],
+    hasDiv?[td((DV[id]||"–")+(TR&&CF.divisionWinners&&TR.leader[id]?" leader":""),"left")]:[])));});
   var said=LIVE?STATIC?null:"Yahoo's own standings count finished weeks only"+(hasFinal()?": choose the final view to check them.":"."):!Y?null:Y.state==="behind"?"Not checked: Yahoo's standings count a different number of games, so they may not have updated yet."
     :Y.state==="match"?"\u2713 Matches Yahoo's standings through "+wkl(TW)+" ("+Y.matched+" of "+Y.total+" teams). Ranks are Yahoo's.":"\u26a0 Differs from Yahoo's standings: "+(Y.diff.length?Y.diff.map(function(i){return name(i)+" (Yahoo "+DOC.yahooStandings[i].record.join("-")+")";}).join(", "):Y.matched+" of "+Y.total+" teams matched")+".",
    tied=TR&&TR.level.length?"Level at a line: "+TR.level.map(function(p){return name(p[0])+" and "+name(p[1]);}).join("; ")+". Yahoo's tie-break decides.":null;
@@ -1075,6 +1079,7 @@ function floatHead(){if(FH){FH.remove();}FH=FHT=FHS=null;if(STATIC)return;
  c.appendChild(cg);var hc=th.cloneNode(true);c.appendChild(hc);
  Array.prototype.forEach.call(hc.querySelectorAll("th"),function(x){x.style.minWidth="0";x.style.maxWidth="none";});
  if(!STATIC)[].forEach.call(hc.rows[hc.rows.length-1].cells,function(x,i){var o=last.cells[i];if(o&&o.__go){x.classList.add("sortable");x.addEventListener("click",o.__go);}});
+ if(last.cells[0].classList.contains("plc"))c.style.setProperty("--plc",last.cells[0].getBoundingClientRect().width+"px");
  c.style.fontSize=getComputedStyle(t).fontSize;c.style.width=t.getBoundingClientRect().width+"px";c.style.tableLayout="fixed";
  FH=h("div",{class:"fh","aria-hidden":"true"},[c]);document.body.appendChild(FH);FHT=t;FHS=sc;
  sc.addEventListener("scroll",updFH,{passive:true});updFH();}
