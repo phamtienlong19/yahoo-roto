@@ -193,7 +193,9 @@ class RangeParity(unittest.TestCase):
             path = os.path.join(d, "doc.json")
             with open(path, "w") as f:
                 json.dump(doc, f)
-            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([RotoPure.sosRest(d,d.weeks,d.odds.schedule,'matchups'),RotoPure.sosRest(d,d.weeks,d.odds.schedule,'cats')]))" % path
+            cases = [([1, 2, 3, 4], "matchups"), ([1, 2, 3, 4], "cats"), ([1, 2, 3], "matchups"), ([1, 2, 3], "cats")]        # through the live week, and through the last finished one
+            calls = ",".join("RotoPure.sosRest(d,%s,d.odds.schedule,'%s')" % (json.dumps(ws), basis) for ws, basis in cases)
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([%s]))" % (path, calls)
             out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
         self.assertEqual(out.returncode, 0, out.stderr)
         got = json.loads(out.stdout)
@@ -213,15 +215,17 @@ class RangeParity(unittest.TestCase):
                     sc, osc = w["teams"][a]["score"], w["teams"][b]["score"]
                     record["matchups"].setdefault(a, []).append([1, 0, 0] if sc > osc else [0, 1, 0] if sc < osc else [0, 0, 1])
                     record["cats"].setdefault(a, []).append(yr.head_to_head(tot[a], tot[b], specs))
-        for basis, res in (("matchups", got[0]), ("cats", got[1])):
+        for (ws, basis), res in zip(cases, got):
             for t in teams:
                 rec = [0, 0, 0]
-                for pairs in schedule.values():
+                for week, pairs in schedule.items():
+                    if int(week) <= ws[-1]:                                                # already counted in the records: not still to come
+                        continue
                     o = next((p[1] if p[0] == t else p[0] for p in pairs if t in p))
-                    for g in record[basis][o]:
+                    for g in record[basis][o][:len(ws)]:
                         rec = [a + b for a, b in zip(rec, g)]
-                self.assertEqual(res[str(t)]["record"], rec, "%s team %d" % (basis, t))
-                self.assertEqual(res[str(t)]["faced"], 7)                                  # seven weeks left
+                self.assertEqual(res[str(t)]["record"], rec, "%s %s team %d" % (basis, ws, t))
+                self.assertEqual(res[str(t)]["faced"], 10 - ws[-1])
 
     def test_recent_form_and_the_strong_weak_split_match_a_from_scratch_computation(self):
         with open(PAGE, encoding="utf-8") as f:
@@ -316,11 +320,36 @@ class RangeParity(unittest.TestCase):
         sched = doc["odds"]["schedule"]
         for t in teams:
             want = []
-            for w in sorted(map(int, sched)):
+            for w in sorted(w for w in map(int, sched) if w > 4):
                 opp = next((b if a == t else a for a, b in sched[str(w)] if t in (a, b)), None)
                 want.append({"week": w, "opp": opp, "rank": rk[opp] if opp is not None else None})
             self.assertEqual([{k: x[k] for k in ("week", "opp", "rank")} for x in got[2][str(t)]], want, t)
         self.assertEqual(sorted(x["rank"] for t in teams for x in got[0][str(t)]), sorted(rank_of([1, 2, 3], "matchups")[x["opp"]] for t in teams for x in got[0][str(t)]))
+
+    def test_standings_are_checked_against_yahoos_own_table(self):
+        comp = self.doc["compositesFinal"]
+        good = self.doc["yahooStandings"]
+        differs = json.loads(json.dumps(good))
+        w, l, t = differs["2"]["record"]
+        differs["2"]["record"] = [w + 1, l - 1, t]
+        behind = json.loads(json.dumps(good))
+        behind["3"]["record"][0] += 9
+        matchups = {t: {"record": r["record"], "rank": 1} for t, r in comp["realRecord"].items()}      # a league whose Yahoo table counts matchups
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "doc.json")
+            with open(path, "w") as f:
+                json.dump([comp, good, differs, behind, matchups], f)
+            code = src + "\nvar d=JSON.parse(require('fs').readFileSync(%r,'utf8'));console.log(JSON.stringify([1,2,3,4].map(function(i){return RotoPure.yahooCheck(d[0],d[i]);}).concat([RotoPure.yahooCheck(d[0],null),RotoPure.yahooCheck(d[0],{})])))" % path
+            out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        a, b, c, m, none, empty = json.loads(out.stdout)
+        self.assertEqual(a, {"state": "match", "matched": 18, "total": 18, "diff": []})
+        self.assertEqual((b["state"], b["diff"], b["matched"]), ("differs", [2], 17))
+        self.assertEqual(c["state"], "behind")
+        self.assertEqual(m["state"], "match")
+        self.assertEqual((none, empty), (None, None))
 
     def test_a_report_without_made_attempts_is_refused_not_misread(self):
         old = json.loads(json.dumps(self.doc))

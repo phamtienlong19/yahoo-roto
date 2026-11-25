@@ -7,7 +7,7 @@ Each week has its own view (Wk 1, Wk 2, ...), and the **Season** tab has five ta
 
 | Tab | The question it answers |
 | --- | --- |
-| **Standings** | Who is ahead? Roto points by category, raw totals, weekly roto points, power rank. |
+| **Standings** | Who is ahead? Roto points by category, raw totals, weekly roto points, power rank, live standings. |
 | **All-Play** | How good are your stats, whoever you faced? |
 | **Luck** | Did you win more or less than your stats deserved? Summary, by week, by category, every matchup. |
 | **Outlook** | Who will make the playoffs, and how hard was each schedule? |
@@ -15,7 +15,7 @@ Each week has its own view (Wk 1, Wk 2, ...), and the **Season** tab has five ta
 
 Each table colours only its one or two key columns, so a colour always means one thing.
 
-A **Matchups | Categories** switch on the Luck tab and on Strength of schedule picks wins or categories. The week range (Weeks 1-N, Last 3 / 5 / 8, or any From / to) applies to every season table.
+Luck and schedule tables open on **Categories**; a switch shows matchups instead. The week range (Weeks 1-N, Last 3 / 5 / 8, or any From / to) applies to most season tables.
 
 The Trends view charts luck, rank and Win% by week. Tap your team's name to highlight it everywhere, **Copy link** shares the exact view, and **Save image** (top right) saves the table as a PNG. It works on phones.
 
@@ -24,7 +24,7 @@ The Trends view charts luck, rank and Win% by week. Tap your team's name to high
 - **All-play:** each week, how you would have done against every team. A game is won by taking more categories.
 - **Expected wins:** each week's all-play Win% added up. It is how many matchups your stats should have won.
 - **Luck:** real wins minus expected wins. **Category luck** is the same in categories won.
-- **Strength of schedule (SOS):** how often your opponents have won, counting every game they played. It is shown for the opponents already faced and for the rest of the season.
+- **Strength of schedule (SOS):** how often your opponents have won, counting every game they played, for those faced and those still to come.
 - **Playoff odds:** the rest of the season is played out 50,000 times from each team's strength. Standing is category points, and division winners qualify first if the league says so.
 - **Honest odds:** strength is treated as uncertain, so early odds stay cautious. The page grades itself on the weeks already played and shows who moved since last week. Rosters and injuries are not modelled.
 

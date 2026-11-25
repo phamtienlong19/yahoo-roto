@@ -231,6 +231,29 @@ def parse_divisions(html, league):
     return out if len(set(out.values())) > 1 else {}
 
 
+def parse_standings(html, league):
+    """Yahoo's own standings table(s) -> {teamId: {"record": [W, L, T], "rank": n or None}}; {} when the page carries no records. Yahoo counts finished weeks only,
+    so this is what the page checks its own standings against."""
+    out = {}
+    for tb in parse_tree(html).find_all(lambda e: e.tag == "table"):
+        heads = [th.text() for th in tb.find_all(lambda e: e.tag == "th")]
+        if "Team" not in heads or "W-L-T" not in heads:
+            continue
+        ri, ki = heads.index("W-L-T"), heads.index("Rank") if "Rank" in heads else None
+        for row in tb.find_all(lambda e: e.tag == "tr"):
+            cells = row.find_all(lambda e: e.tag == "td")
+            links = row.find_all(lambda e: e.tag == "a" and re.search(r"/%s/(\d+)/?$" % re.escape(str(league)), e.attrs.get("href", "")))
+            if not links or len(cells) <= ri:
+                continue
+            rec = re.fullmatch(r"\s*(\d+)-(\d+)-(\d+)\s*", cells[ri].text())
+            if not rec:
+                continue
+            rank = re.search(r"\d+", cells[ki].text()) if ki is not None and len(cells) > ki else None
+            tid = int(re.search(r"/(\d+)/?$", links[0].attrs["href"]).group(1))
+            out.setdefault(tid, {"record": [int(x) for x in rec.groups()], "rank": int(rank.group()) if rank else None})
+    return out
+
+
 def _num(s):
     s = (s or "").strip().replace(",", "")
     if s in ("", "-", "--"):
@@ -584,6 +607,7 @@ def load(league, cache=None, delay=1.5, sport="nba", only_week=None, through=Non
     stand = fx.get(base + "?lhst=stand", ttl=TTL["standings"])
     teams = parse_teams(stand, league)
     st["divisions"] = {t: d for t, d in parse_divisions(stand, league).items() if t in teams}
+    st["standings"] = {t: r for t, r in parse_standings(stand, league).items() if t in teams}
     if len(teams) < 2:
         raise RotoError("could not read the teams from the standings page")
     ids = sorted(teams)
@@ -1068,9 +1092,9 @@ def cat_points_through(weeks_data, specs, ids):
     return out
 
 
-def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life=None, live=True):
+def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, live=True):
     """The playoff chances as they stood after each finished week: [{"week": k, "teams": {team: chance}}]. Week k uses only what was known then (strengths and category points
-    from weeks 1..k) and the real pairings of the weeks after it (`pairs_after`: week -> pairs or None). Each week is simulated once and remembered by a fingerprint of its inputs,
+    from weeks 1..k, the recency setting chosen from them too) and the real pairings of the weeks after it (`pairs_after`: week -> pairs or None). Each week is simulated once and remembered by a fingerprint of its inputs,
     so only a week whose inputs changed (a stat correction, a newly read schedule week) is simulated again."""
     spots = settings.get("playoff_teams")
     divisions = settings.get("divisions") or {}
@@ -1085,6 +1109,7 @@ def odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, 
         saved = {}
     out, changed = [], False
     for k in range(1, done + 1):
+        half_life = choose_half_life(weeks_data[:k], specs, ids)[0]       # chosen from those weeks only, never from what came later
         st = strengths(weeks_data[:k], specs, ids, half_life)
         if not st:
             continue
@@ -1149,7 +1174,7 @@ def backtest(weeks_data, specs, ids, half_life=None):
 
 
 HALF_LIVES = (8, 5, 3)         # weeks; tried against equal weights once enough weeks are in
-MIN_WEEKS_FOR_RECENCY = 6      # fewer finished weeks cannot tell the options apart
+MIN_WEEKS_FOR_RECENCY = 10     # fewer finished weeks cannot tell the options apart (and the choice is graded on the weeks it was made from)
 RECENCY_MARGIN = 0.02          # a half-life must beat equal weights by this share of the Brier score to be used
 
 
@@ -1214,7 +1239,7 @@ def odds_block(settings, weeks_data, specs, ids, final_cat_record, fx, league, b
     out["schedule"] = {str(w): [list(p) for p in pairs] for w, pairs in zip(left, remaining) if pairs}      # who plays whom in the weeks still to come (the page rates that schedule)
     pairs_after = {wk["week"]: wk.get("matchups") or None for wk in weeks_data}
     pairs_after.update({w: sched.get(w) for w in ahead})
-    out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, half_life, live)
+    out["history"] = odds_history(settings, weeks_data, specs, ids, pairs_after, regular, cache, league, live)
     if p:
         write_atomic(p, json.dumps({"fp": fp, "odds": out}, separators=(",", ":")))
     return out
@@ -1377,6 +1402,8 @@ def report(league, cache=None, delay=1.5, sport="nba", now=None, champion=None):
             "skipped": skipped, "teams": {str(t): names[t] for t in names}, "weeks": [wk["week"] for wk in weeks_data], "views": views,
             "composites": comps,
             "compositesFinal": composites_final, "odds": odds}
+    if st.get("standings"):
+        doc["yahooStandings"] = {str(t): r for t, r in sorted(st["standings"].items())}     # Yahoo's own table, to check the page's standings against
     if cup:
         doc["cup"] = cup                                                 # only for a cup league: every other report is byte for byte what it was
     return doc

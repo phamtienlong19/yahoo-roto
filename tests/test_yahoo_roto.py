@@ -29,6 +29,11 @@ class Settings(unittest.TestCase):
     def test_teams_come_from_the_standings_rows(self):
         html = '<table><tr><th>Rank</th><th>Team</th></tr><tr><td>1</td><td><a href="/nba/9/4">Alpha</a></td></tr><tr><td>2</td><td><a href="/nba/9/7">Beta</a></td></tr></table>'
         self.assertEqual(yr.parse_teams(html, 9), {4: "Alpha", 7: "Beta"})
+        self.assertEqual(yr.parse_standings(html, 9), {})                                    # no records on this table
+        table = ('<table><tr><th>Rank</th><th>Team</th><th>W-L-T</th><th>Div</th></tr><tr><td colspan="4"><h4>East</h4></td></tr>'
+                 '<tr><td>*1</td><td><a href="/nba/9/4"><img></a><a href="/nba/9/4">Alpha</a></td><td>29-15-1</td><td>9-0-0</td></tr>'
+                 '<tr><td>2</td><td><a href="/nba/9/7">Beta</a></td><td>-</td><td>-</td></tr></table>')
+        self.assertEqual(yr.parse_standings(table, 9), {4: {"record": [29, 15, 1], "rank": 1}})
 
 
 class Weekly(unittest.TestCase):
