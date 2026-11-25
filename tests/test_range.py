@@ -326,6 +326,22 @@ class RangeParity(unittest.TestCase):
             self.assertEqual([{k: x[k] for k in ("week", "opp", "rank")} for x in got[2][str(t)]], want, t)
         self.assertEqual(sorted(x["rank"] for t in teams for x in got[0][str(t)]), sorted(rank_of([1, 2, 3], "matchups")[x["opp"]] for t in teams for x in got[0][str(t)]))
 
+    def test_live_ranks_split_level_records_in_yahoos_order(self):
+        def rec(w, l, t):
+            return {"catRecord": [w, l, t], "catWinPct": (w + t / 2) / (w + l + t)}
+        R = {"1": rec(30, 24, 0), "2": rec(31, 23, 0), "3": rec(31, 23, 0), "4": rec(20, 34, 0), "5": rec(31, 23, 0)}
+        yahoo = {"1": {"rank": 1}, "2": {"rank": 5}, "3": {"rank": 2}, "4": {"rank": 4}, "5": {"rank": None}}
+        with open(PAGE, encoding="utf-8") as f:
+            src = re.search(r'<script id="pure">(.*?)</script>', f.read(), re.S).group(1)
+        code = src + "\nconsole.log(JSON.stringify([RotoPure.standingsRanks(%s,%s),RotoPure.standingsRanks(%s,null)]))" % (json.dumps(R), json.dumps(yahoo), json.dumps(R))
+        out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        got, none = json.loads(out.stdout)
+        self.assertEqual({t: v["rank"] for t, v in got.items()}, {"3": 1, "2": 2, "5": 3, "1": 4, "4": 5})     # level on .574: Yahoo's order, a team Yahoo does not rank last
+        self.assertEqual({t: v["move"] for t, v in got.items()}, {"3": 1, "2": 3, "5": None, "1": -3, "4": -1})
+        self.assertEqual(sorted(v["rank"] for v in none.values()), [1, 2, 3, 4, 5])
+        self.assertTrue(all(v["move"] is None for v in none.values()))
+
     def test_the_standings_tiers_follow_the_playoff_rule_and_flag_ties_on_a_line(self):
         def team(i, pct, tb=0, div=None):
             return {"id": str(i), "points": pct, "tb": tb, "div": div}

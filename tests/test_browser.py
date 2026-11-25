@@ -24,7 +24,7 @@ var R={},errors=[];
 var COLOURS=[['board=real&basis=matchups',['Luck','Places vs expected']],['board=luck&lens=summary&basis=cats',['Category luck','Places vs expected']],['board=luck&lens=week&basis=matchups',['Wk 2','Luck']],['board=standings&lens=live',['Record']],['board=luck&lens=cat',['PTS','TO','Luck']],
  ['board=outlook&lens=sos',['SOS','Rank']],['board=outlook&lens=odds',['Playoffs']],['board=weekly',['Points','Rank']],['board=allplay',['Win%','Rank']],['board=power',['Season Roto','Weekly Roto','Season All-Play','Real Record','Power']],['board=roto',['Total']],
  ['board=matchlog',['Category luck']],['board=performance&lens=form',['Win%']],];
-var PLAIN=[['board=real&basis=matchups',['Record','Wins','Expected wins','Rank','Expected rank']],['board=standings&lens=live',['GB','Wk 4 vs','Rank','Div']],['board=luck&lens=cat',['Won','Expected','Rank']],['board=outlook&lens=sos',["Opponents' record"]],['board=outlook&lens=odds',['Top seed','Projected rank','Since Wk 2']],
+var PLAIN=[['board=real&basis=matchups',['Record','Wins','Expected wins','Rank','Expected rank']],['board=standings&lens=live',['GB','Opponent','Score','Rank','Div']],['board=luck&lens=cat',['Won','Expected','Rank']],['board=outlook&lens=sos',["Opponents' record"]],['board=outlook&lens=odds',['Top seed','Projected rank','Since Wk 2']],
  ['board=weekly',['Per week']],['board=allplay',['W-L-T']],['board=matchlog',['All-play Win%',"Opponent's Win%",'Matchup luck']],['board=roto',['Rank']],['board=performance&lens=form',['Last 3','Season Win%','Stats said']],['board=performance&lens=split',['Vs strong','Vs weak']]];
 var COPYQ=['season=1&board=roto','season=1&board=totals','season=1&board=matrix','season=1&board=weekly','season=1&board=allplay','season=1&board=real','season=1&board=luck&lens=summary&basis=cats','season=1&board=luck&lens=week','season=1&board=luck&lens=week&basis=cats','season=1&board=luck&lens=cat',
  'season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=sos&per=rest','season=1&board=outlook&lens=sos&per=rest&thru=final','season=1&board=standings&lens=live','season=1&board=standings&lens=live&thru=final','season=1&board=outlook&lens=odds','season=1&board=kings','season=1&board=performance&lens=form','season=1&board=performance&lens=split','season=1&board=performance&lens=trends','season=1&board=power','week=3&view=roto','week=3&view=stats','week=3&view=allplay','week=3&view=matchups'];
@@ -59,13 +59,19 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  p=await load('season=1&board=luck&lens=summary');R.defH1=txt(p.d.querySelector('h1'));R.defBasis=txt(p.d.querySelector('#lensbar .seg:nth-child(2) button.on'));R.defUrl=p.w.location.search;
  p=await load('season=1&board=performance&lens=trends');R.trDefH1=txt(p.d.querySelector('h1'));
  p=await load('season=1&board=matchlog');R.mlHeads=[].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt);R.mlCat=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).map(function(r){return parseFloat(r.cells[5].textContent.replace('\u2212','-'))});
- var tierText=function(p){return [].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr.tier')).map(txt)};
+ var stand=function(p){return [].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr:not(.tier)')).map(function(r){
+  var opp=function(c){var s=c&&c.querySelector('.chips span');return c?{rank:txt(s),cls:s&&s.className,name:txt(c.querySelector('.on'))}:null},mv=r.cells[0].querySelector('.mv'),sc=r.cells[5].querySelector('.chips span');
+  return {rank:txt(r.cells[0].querySelector('.rkn')),move:txt(mv),moveCls:mv&&mv.className,moveTip:mv&&mv.title,team:txt(r.cells[1]),record:txt(r.cells[2]),gb:txt(r.cells[3]),now:opp(r.cells[4]),score:txt(sc),scoreCls:sc&&sc.className,next:opp(r.cells[6])}})},
+  groupText=function(p){return [].slice.call(p.d.querySelectorAll('.tscroll .st thead tr.grp th')).map(txt).filter(Boolean)},tierText=function(p){return [].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr.tier')).map(txt)};
  var rows=function(p){return [].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr:not(.tier)')).map(function(r){return [].slice.call(r.cells).map(txt)})},heads=function(p){return [].slice.call(p.d.querySelectorAll('.tscroll .st thead tr:last-child th')).map(txt)},chipText=function(p){return [].slice.call(p.d.querySelectorAll('#snapbar button')).map(txt)};
- p=await load('season=1&board=standings&lens=live');R.lv={tiers:tierText(p),sortable:p.d.querySelectorAll('.tscroll .st th.sortable').length,lens:[].slice.call(p.d.querySelectorAll('#lensbar .seg:first-child button')).map(txt),h1:txt(p.d.querySelector('h1')),heads:heads(p),rows:rows(p),chips:chipText(p),said:txt(p.d.querySelector('.accline')),status:txt(p.d.querySelector('#status'))};
- p.d.querySelectorAll('#snapbar button')[1].click();R.fin={h1:txt(p.d.querySelector('h1')),heads:heads(p),rows:rows(p),said:txt(p.d.querySelector('.accline')),url:p.w.location.search,status:txt(p.d.querySelector('#status'))};
+ p=await load('season=1&board=standings&lens=live');R.lv={stand:stand(p),groups:groupText(p),tiers:tierText(p),sortable:p.d.querySelectorAll('.tscroll .st th.sortable').length,lens:[].slice.call(p.d.querySelectorAll('#lensbar .seg:first-child button')).map(txt),h1:txt(p.d.querySelector('h1')),heads:heads(p),rows:rows(p),chips:chipText(p),said:txt(p.d.querySelector('.accline')),status:txt(p.d.querySelector('#status'))};
+ p.d.querySelectorAll('#snapbar button')[1].click();R.fin={stand:stand(p),groups:groupText(p),h1:txt(p.d.querySelector('h1')),heads:heads(p),rows:rows(p),said:txt(p.d.querySelector('.accline')),url:p.w.location.search,status:txt(p.d.querySelector('#status'))};
  p=await load('season=1');R.seasonH1=txt(p.d.querySelector('h1'));
  p=await load('week=3&view=roto');p.d.querySelector('.strip button.season').click();R.fromWeek=txt(p.d.querySelector('h1'));
  p=await load('season=1&board=standings&lens=live&thru=final','tiers/');R.house={tiers:tierText(p),said:[].slice.call(p.d.querySelectorAll('.accline')).map(txt),rows:p.d.querySelectorAll('.tscroll .st tbody tr:not(.tier)').length};
+ R.dark={};for(var q of ['board=standings&lens=live','board=weekly','board=outlook&lens=sos']){p=await load('season=1&'+q);p.d.documentElement.setAttribute('data-theme','dark');
+  var bg=function(sel){var e=p.d.querySelector('.tscroll .chips span'+sel);return e?p.w.getComputedStyle(e).backgroundColor:null};R.dark[q]={green:bg('.green-strong,.tscroll .chips span.dark-green,.tscroll .chips span.green'),red:bg('.red-strong,.tscroll .chips span.dark-red,.tscroll .chips span.red'),plain:bg('.mid,.tscroll .chips span.white')};p.d.documentElement.removeAttribute('data-theme');}
+ p=await load('season=1&board=standings&lens=live','behind/');R.behind={stand:stand(p),said:[].slice.call(p.d.querySelectorAll('.accline')).map(txt)};
  p=await load('season=1&board=standings&lens=live','settled/');R.set={h1:txt(p.d.querySelector('h1')),chips:chipText(p),said:txt(p.d.querySelector('.accline'))};
  p=await load('season=1&board=outlook&lens=sos&per=rest&basis=cats');R.restSum=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody tr')).map(function(r){return {total:r.cells[1].textContent,tips:[].slice.call(r.querySelectorAll('.chips span')).map(function(c){return c.title})}});R.restSub=txt(p.d.querySelector('.view-subtitle'));R.restChips=chipText(p);
  p=await load('season=1&board=outlook&lens=sos&per=rest&basis=matchups&thru=final');R.restFinRec=txt(p.d.querySelector('.tscroll .st tbody tr:first-child td:nth-child(2)'));R.restFinSub=txt(p.d.querySelector('.view-subtitle'));
@@ -129,7 +135,9 @@ function save(p,name){return new Promise(function(res,rej){var t=setTimeout(func
  for(var q of ['week=4&view=roto','week=4&view=allplay','week=4&view=matchups','season=1&board=standings&lens=live','season=1&board=matchlog','season=1&board=outlook&lens=sos','season=1&board=outlook&lens=odds','season=1&board=performance&lens=trends','season=1&board=kings','static=1&season=1&board=weekly']){
   p=await load(q,'cup/');p.w.scrollTo(0,700);p.w.dispatchEvent(new p.w.Event('scroll'));if(q.indexOf('static')<0)p.d.querySelector('#status .linkbtn').click();
   [].forEach.call(p.d.querySelectorAll('.wrap,.wrap *,.wrap~*,.wrap~* *'),function(e){if(e.closest('script,style,.crown'))return;R.fontsSeen++;var f=p.w.getComputedStyle(e).fontFamily;if(!/^"?Manrope/.test(f))R.fonts.push(q+' '+e.tagName+'.'+e.getAttribute('class')+' '+f);});}
- p=await load('season=1&board=standings&lens=live','cup/');R.cupTier={badges:p.d.querySelectorAll('tr.tier .rb').length,heads:[].slice.call(p.d.querySelectorAll('tr.tier th > span')).map(txt),ranks:p.d.querySelectorAll('.tscroll .st tbody tr:not(.tier) td.rank .rb').length,gold:[].slice.call(p.d.querySelectorAll('.rb.gold')).map(txt)};
+ p=await load('season=1&board=standings&lens=live','cup/');R.cupStand={badges:p.d.querySelectorAll('td.plc .rkn.rb').length,moves:p.d.querySelectorAll('td.plc .mv').length,inside:p.d.querySelectorAll('td.plc .rb .mv').length,
+  chips:[].slice.call(p.d.querySelectorAll('.st th.team .lgchip')).map(function(e){return [e.textContent,e.classList.contains('champ'),e.title,e.closest('th').querySelector('.crown')!==null]}),key:txt(p.d.querySelector('.cupkey'))};
+ R.cupTier={badges:p.d.querySelectorAll('tr.tier .rb').length,heads:[].slice.call(p.d.querySelectorAll('tr.tier th > span')).map(txt),ranks:p.d.querySelectorAll('.tscroll .st tbody tr:not(.tier) td.rank .rb').length,gold:[].slice.call(p.d.querySelectorAll('.rb.gold')).map(txt)};
  p=await load('season=1&board=standings&lens=live');R.plainFont=p.w.getComputedStyle(p.d.querySelector('.sheet h1')).fontFamily;
  p=await load('season=1&board=outlook&lens=race','cup/');R.raceLenses=[].slice.call(p.d.querySelectorAll('#lensbar .seg button')).map(txt);R.raceH1=txt(p.d.querySelector('h1'));R.raceRows=p.d.querySelectorAll('.tscroll .st tbody tr').length;R.raceIn=p.d.querySelectorAll('.tscroll .st tbody tr.in').length;R.raceEdge=p.d.querySelectorAll('.tscroll .st tbody th.team.q').length;
  R.raceStatus=[].slice.call(p.d.querySelectorAll('.tscroll .st tbody td.status')).map(txt);R.raceLeaders=R.raceStatus.filter(function(x){return /leader/.test(x)}).length;
@@ -158,6 +166,10 @@ class Browser(unittest.TestCase):
         house = json.loads(json.dumps(main))                                                              # a league with house rules below the playoff line
         house["tiers"].update(consolationTo=12, noKeepers=2)
         yr.write_html(house, os.path.join(cls.site, "tiers"))
+        behind = json.loads(json.dumps(main))                                                             # Yahoo's table has not counted the last finished week yet
+        for r in behind["yahooStandings"].values():
+            r["record"][0] -= 1
+        yr.write_html(behind, os.path.join(cls.site, "behind"))
         pre = json.loads(json.dumps(main))
         pre["odds"].update(complete=False, scheduleWeeks=3, sims=50000, margin=0.44)
         yr.write_html(pre, os.path.join(cls.site, "pre"))
@@ -211,7 +223,7 @@ class Browser(unittest.TestCase):
         self.assertTrue(R["cupWrap"])
         self.assertEqual((R["cupSheet"], R["cupHead"], R["cupKey"]), (1, 1, 1))
         self.assertIn("TOP 8 ADVANCE", R["cupKicker"].upper())
-        self.assertEqual(sorted(R["cupChips"]), ["SA 1", "SA 2", "SA 3*"])                           # * = a substitute
+        self.assertEqual(sorted(R["cupChips"]), ["SA 2", "SA 3*", "\u2605 SA 1"])                    # * = a substitute, a star = that league's champion
         self.assertIn("playing in place of Somebody", R["cupChipTip"])
         self.assertEqual(R["cupBand"], 0)                                                              # roto rank does not decide the playoffs: no band or cut line on the roto tables
         self.assertGreater(R["rb"], 0)                                                                 # Rank cells are league-table badges
@@ -320,7 +332,8 @@ class Browser(unittest.TestCase):
         lv, fin = self.R["lv"], self.R["fin"]
         self.assertIn("Live Standings", lv["h1"])
         self.assertEqual(lv["chips"], ["Thru Wk 4 \u00b7 live", "Thru Wk 3 \u00b7 final"])
-        self.assertEqual(lv["heads"], ["Rank", "Team", "Record", "GB", "Wk 4 vs", "Score", "Wk 5 vs", "Div"])       # the rank leads; one record column, games behind, who they face and who is next
+        self.assertEqual(lv["heads"], ["Rank", "Team", "Record", "GB", "Opponent", "Score", "Opponent", "Div"])     # the rank leads; this week and next week are separate groups
+        self.assertEqual((lv["groups"], fin["groups"]), (["Wk 4 \u00b7 now", "Wk 5 \u00b7 next"], ["Wk 3 \u00b7 played", "Wk 4 \u00b7 now"]))
         for rows in (lv["rows"], fin["rows"]):
             lead = [int(w) - int(losses) for w, losses, _ in (r[2].split("-") for r in rows)]
             want = ["\u2013" if x == max(lead) else "%g" % ((max(lead) - x) / 2) for x in lead]
@@ -328,10 +341,11 @@ class Browser(unittest.TestCase):
         self.assertEqual((len(lv["rows"]), len(fin["rows"])), (18, 18))
         self.assertTrue(all(sum(int(x) for x in r[2].split("-")) == 4 * 9 for r in lv["rows"]))
         self.assertTrue(all(sum(int(x) for x in r[2].split("-")) == 3 * 9 for r in fin["rows"]))
-        self.assertTrue(all(re.match(r"^(T-)?\d+$", r[0]) for r in lv["rows"] + fin["rows"]))
+        self.assertTrue(all(re.match(r"^\d+$", r["rank"]) for r in lv["stand"]))                     # level records keep Yahoo's order: one number each
+        self.assertEqual(sorted(int(r["rank"]) for r in lv["stand"]), list(range(1, 19)))
         self.assertIn("finished weeks only", lv["said"])
         self.assertIn("Standings after Wk 3", fin["h1"])
-        self.assertEqual(fin["heads"], ["Rank", "Team", "Record", "GB", "Wk 3 vs", "Score", "Wk 4 vs", "Div"])
+        self.assertEqual(fin["heads"], lv["heads"])
         self.assertIn("Ranks are Yahoo's", fin["said"])
         self.assertIn("Matches Yahoo's standings through Wk 3 (18 of 18 teams)", fin["said"])
         self.assertIn("thru=final", fin["url"])
@@ -353,10 +367,59 @@ class Browser(unittest.TestCase):
         for view, week in ((self.R["lv"], 4), (self.R["fin"], 3)):
             for row in view["rows"]:
                 t = next(k for k, v in names.items() if row[1].startswith(v) and by_name[v] == k)
+                got = next(r for r in view["stand"] if r["team"] == row[1])
                 now = d["composites"]["weekly"][t][str(week)]["opp"]
-                self.assertTrue(row[4].startswith(names[str(now)]), (week, row))
+                self.assertEqual(got["now"]["name"], names[str(now)], (week, row))
                 nxt = str(d["composites"]["weekly"][t]["4"]["opp"]) if week == 3 else opponent(d["odds"]["schedule"]["5"], t)
-                self.assertTrue(row[6].startswith(names[nxt]), (week, row))
+                self.assertEqual(got["next"]["name"], names[nxt], (week, row))
+
+    def test_each_opponent_carries_its_rank_in_the_same_table_red_when_tough(self):
+        for view in (self.R["lv"], self.R["fin"]):
+            rank = {r["team"].split(" \ud83d")[0].strip(): r["rank"].replace("T-", "") for r in view["stand"]}
+            for r in view["stand"]:
+                for o in (r["now"], r["next"]):
+                    self.assertEqual(o["rank"], next(v for k, v in rank.items() if k.startswith(o["name"])), (r["team"], o))
+                    if o["rank"] == "1":
+                        self.assertEqual(o["cls"], "red-strong")
+                    if o["rank"] == "18":
+                        self.assertEqual(o["cls"], "green-strong")
+        self.assertTrue(all(re.match(r"^\d+-\d+(-\d+)?$", r["score"]) for r in self.R["lv"]["stand"]))
+
+    def test_the_arrows_show_places_moved_since_yahoos_own_rank(self):
+        d = self.main
+        R, Y, names = d["composites"]["realRecord"], d["yahooStandings"], d["teams"]
+        order = sorted(R, key=lambda t: (-R[t]["catWinPct"], Y[t]["rank"], -(R[t]["catRecord"][0] - R[t]["catRecord"][1]), int(t)))
+        shown = {r["team"]: r for r in self.R["lv"]["stand"]}
+        for place, t in enumerate(order, 1):
+            r = next(v for k, v in shown.items() if k.startswith(names[t]))
+            move = Y[t]["rank"] - place
+            self.assertEqual(r["rank"], str(place), names[t])
+            self.assertEqual(r["move"], "\u25b2%d" % move if move > 0 else "\u25bc%d" % -move if move < 0 else "\u25cf", names[t])
+            self.assertEqual(r["moveCls"], "mv " + ("up" if move > 0 else "down" if move < 0 else "same"))
+            self.assertIn("from Yahoo's", r["moveTip"])
+        self.assertIn("Arrows: places moved since Yahoo's standings after Wk 3", self.R["lv"]["said"])
+        self.assertTrue(all(r["move"] is None for r in self.R["fin"]["stand"]))                       # the final view is Yahoo's own table: nothing to move from
+
+    def test_the_small_squares_keep_their_shades_in_dark_mode(self):
+        for q, got in self.R["dark"].items():
+            self.assertIsNotNone(got["green"], q)
+            self.assertIsNotNone(got["red"], q)
+            self.assertNotEqual(got["green"], got["red"], q)                                           # a base rule once painted every square the same dark grey
+            self.assertNotIn("rgb(23, 30, 38)", (got["green"], got["red"]), q)
+
+    def test_there_are_no_arrows_while_yahoos_table_lags(self):
+        self.assertTrue(all(r["move"] is None for r in self.R["behind"]["stand"]))
+        self.assertIn("No arrows: Yahoo's standings do not count Wk 3 yet.", self.R["behind"]["said"])
+
+    def test_member_league_champions_get_a_star_and_the_holders_stay_apart(self):
+        s = self.R["cupStand"]
+        self.assertEqual((s["badges"], s["moves"], s["inside"]), (18, 18, 0))                          # rank badges and arrows side by side, never one inside the other
+        for text, champ, tip, crowned in s["chips"]:
+            self.assertEqual(champ, text.startswith("\u2605"), text)
+            self.assertEqual("champion" in tip, champ, tip)
+            self.assertFalse(champ and crowned, text)
+        self.assertEqual([c[0] for c in s["chips"] if c[1]], ["\u2605 SA 1"])
+        self.assertIn("champion of that league", s["key"])
 
     def test_the_standings_are_split_into_tiers_and_keep_that_order(self):
         self.assertEqual(self.R["lv"]["tiers"], ["1st-round bye \u00b7 1\u20132", "Playoffs \u00b7 3\u20136", "Outside the playoffs \u00b7 7\u201318"])
